@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+type BlockHash = []byte
+
 // The definition of blockheader
 type BlockHeader struct {
 	ParentBlockHash []byte //父区块的哈希
@@ -21,7 +23,8 @@ type BlockHeader struct {
 	Time            time.Time
 	Miner           uint64 //区块的生产者(矿工)
 
-	DAGParentBlockHashes [][]byte
+	//DAG Structure
+	DagData *DAGStructureData
 }
 
 // Encode blockHeader for storing further
@@ -109,4 +112,12 @@ func DecodeB(b []byte) *Block {
 	}
 
 	return &block
+}
+
+type DAGStructureData struct {
+	Name          string //hash[]byte->string
+	Score         int
+	SizeOfPastSet int // Size of its past set (blocks). It's fixed number once a block is created, and can't change anymore.
+	Prev          map[string]*Block
+	Blue          map[string]bool
 }
