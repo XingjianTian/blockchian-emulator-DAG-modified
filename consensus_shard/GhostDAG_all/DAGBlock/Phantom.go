@@ -23,20 +23,6 @@ type Phantom struct {
 
 // NewPhantom 创建并初始化一个新的 Phantom 实例
 func NewPhantom(k int) *Phantom {
-
-	return &Phantom{
-		G:           make(MapBlocks),
-		Tips:        make(MapBlocks),
-		Blues:       make(MapBlocks),
-		Next:        make(map[string]MapBlocks),
-		GenesisHash: nil,
-		k:           k,
-	}
-}
-
-// Init 初始化 Phantom DAG
-func (p *Phantom) Init() error {
-	// 在这里实现初始化逻辑，例如添加创世区块
 	// 示例：创建创世区块并将其添加到 DAG
 	genesisBlock := &core.Block{
 		Header: &core.BlockHeader{
@@ -46,10 +32,18 @@ func (p *Phantom) Init() error {
 		Body: nil,
 		Hash: nil, // 创世区块的哈希通常设置为特定的值，如空哈希或零哈希
 	}
-	p.GenesisHash = genesisBlock.Hash // 假设 Block 结构体有一个方法来计算哈希
-	p.AddBlockByHash(genesisBlock.Hash, genesisBlock)
-	//p.Tips.Add(genesisBlock.Hash)
-	return nil
+	p := Phantom{
+		G:           make(MapBlocks),
+		Tips:        make(MapBlocks),
+		Blues:       make(MapBlocks),
+		Next:        make(map[string]MapBlocks),
+		GenesisHash: genesisBlock.Hash,
+		k:           0,
+	}
+
+	p.G["Genesis"] = genesisBlock
+
+	return &p
 }
 
 func (p *Phantom) AddBlockByStringName(blockHash string, block *core.Block) {
@@ -184,6 +178,11 @@ func (p *Phantom) SizeOfPastSet(B *core.Block) int {
 	p.PastSet(B, past)
 	return len(past)
 }
+
+// lexicographical topological priority queue
+//返回按字典序拓扑排序的节点优先级队列。
+//拓扑排序是节点的非唯一排列，使得从 u 到 v 的边意味着 u 在拓扑排序顺序中出现在 v 之前。
+//从highest score开始
 
 func (p *Phantom) LTPQ(Graph MapBlocks, ascending bool) []string {
 
