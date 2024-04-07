@@ -4,6 +4,7 @@
 package chain
 
 import (
+	"blockEmulator/consensus_shard/GhostDAG_all/DAGBlock"
 	"blockEmulator/core"
 	"blockEmulator/params"
 	"blockEmulator/storage"
@@ -41,6 +42,9 @@ type BlockChain struct {
 	Txpool       *core.TxPool        // the transaction pool
 	PartitionMap map[string]uint64   // the partition map which is defined by some algorithm can help account partition
 	pmlock       sync.RWMutex
+
+	isDAG   bool
+	Phantom *DAGBlock.Phantom
 }
 
 // Write Partition Map
@@ -155,123 +159,267 @@ func (bc *BlockChain) GetUpdateStatusTrie(txs []*core.Transaction) common.Hash {
 
 // generate (mine) a block, this function return a block
 func (bc *BlockChain) GenerateBlock() *core.Block {
-	// pack the transactions from the txpool
-	txs := bc.Txpool.PackTxs(bc.ChainConfig.BlockSize)
-	bh := &core.BlockHeader{
-		ParentBlockHash: bc.CurrentBlock.Hash,
-		Number:          bc.CurrentBlock.Header.Number + 1,
-		Time:            time.Now(),
-	}
-	// handle transactions to build root
-	// 建造交易MKT，用来验证？
-	//自己创建的区块，已经更新了这一次，后面再Add就不需要再来一次了
-	rt := bc.GetUpdateStatusTrie(txs)
+	if !bc.isDAG {
+		// pack the transactions from the txpool
+		txs := bc.Txpool.PackTxs(bc.ChainConfig.BlockSize)
+		bh := &core.BlockHeader{
+			ParentBlockHash: bc.CurrentBlock.Hash,
+			Number:          bc.CurrentBlock.Header.Number + 1,
+			Time:            time.Now(),
+		}
+		// handle transactions to build root
+		// 建造交易MKT，用来验证？
+		//自己创建的区块，已经更新了这一次，后面再Add就不需要再来一次了
+		rt := bc.GetUpdateStatusTrie(txs)
 
-	bh.StateRoot = rt.Bytes()
-	bh.TxRoot = GetTxTreeRoot(txs)
-	b := core.NewBlock(bh, txs)
-	b.Header.Miner = 0
-	b.Hash = b.Header.Hash()
-	return b
+		bh.StateRoot = rt.Bytes()
+		bh.TxRoot = GetTxTreeRoot(txs)
+		b := core.NewBlock(bh, txs)
+		b.Header.Miner = 0
+		b.Hash = b.Header.Hash()
+		return b
+	} else {
+		txs := bc.Txpool.PackTxs(bc.ChainConfig.BlockSize)
+		bh := &core.BlockHeader{
+			//changeParent
+			ParentBlockHash: bc.CurrentBlock.Hash,
+			Number:          bc.CurrentBlock.Header.Number + 1,
+			Time:            time.Now(),
+		}
+		// handle transactions to build root
+		// 建造交易MKT，用来验证？
+		//自己创建的区块，已经更新了这一次，后面再Add就不需要再来一次了
+		rt := bc.GetUpdateStatusTrie(txs)
+
+		bh.StateRoot = rt.Bytes()
+		bh.TxRoot = GetTxTreeRoot(txs)
+		b := core.NewBlock(bh, txs)
+		b.Header.Miner = 0
+		b.Hash = b.Header.Hash()
+
+		//DAGStructure
+		b.Header.DagData = &core.DAGStructureData{
+			Name:          string(b.Hash),
+			Score:         -1,
+			SizeOfPastSet: -1,
+			Prev:          make(DAGBlock.MapBlocks),
+			Blue:          make(map[string]bool),
+		}
+
+		//设置b的真正的ParentHashes
+
+		return b
+	}
 }
 
 // new a genisis block, this func will be invoked only once for a blockchain object
 func (bc *BlockChain) NewGenisisBlock() *core.Block {
-	body := make([]*core.Transaction, 0)
-	bh := &core.BlockHeader{
-		Number: 0,
+	if !bc.isDAG {
+		body := make([]*core.Transaction, 0)
+		bh := &core.BlockHeader{
+			Number: 0,
+		}
+		// build a new trie database by db
+		triedb := trie.NewDatabaseWithConfig(bc.db, &trie.Config{
+			Cache:     0,
+			Preimages: true,
+		})
+		bc.triedb = triedb
+		statusTrie := trie.NewEmpty(triedb)
+		bh.StateRoot = statusTrie.Hash().Bytes()
+		bh.TxRoot = GetTxTreeRoot(body)
+		b := core.NewBlock(bh, body)
+		b.Hash = b.Header.Hash()
+		return b
+	} else {
+		body := make([]*core.Transaction, 0)
+		bh := &core.BlockHeader{
+			Number: 0,
+		}
+		// build a new trie database by db
+		triedb := trie.NewDatabaseWithConfig(bc.db, &trie.Config{
+			Cache:     0,
+			Preimages: true,
+		})
+		bc.triedb = triedb
+		statusTrie := trie.NewEmpty(triedb)
+		bh.StateRoot = statusTrie.Hash().Bytes()
+		bh.TxRoot = GetTxTreeRoot(body)
+		b := core.NewBlock(bh, body)
+		b.Hash = b.Header.Hash()
+		dagData := core.DAGStructureData{
+			Name:          "Genesis",
+			Score:         -1,
+			SizeOfPastSet: -1,
+			Prev:          make(DAGBlock.MapBlocks),
+			Blue:          make(map[string]bool),
+		}
+		b.Header.DagData = &dagData
+		return b
 	}
-	// build a new trie database by db
-	triedb := trie.NewDatabaseWithConfig(bc.db, &trie.Config{
-		Cache:     0,
-		Preimages: true,
-	})
-	bc.triedb = triedb
-	statusTrie := trie.NewEmpty(triedb)
-	bh.StateRoot = statusTrie.Hash().Bytes()
-	bh.TxRoot = GetTxTreeRoot(body)
-	b := core.NewBlock(bh, body)
-	b.Hash = b.Header.Hash()
-	return b
 }
 
 // add the genisis block in a blockchain
 func (bc *BlockChain) AddGenisisBlock(gb *core.Block) {
-	bc.Storage.AddBlock(gb)
-	newestHash, err := bc.Storage.GetNewestBlockHash()
-	if err != nil {
-		log.Panic()
+	if !bc.isDAG {
+		bc.Storage.AddBlock(gb)
+		newestHash, err := bc.Storage.GetNewestBlockHash()
+		if err != nil {
+			log.Panic()
+		}
+		curb, err := bc.Storage.GetBlock(newestHash)
+		if err != nil {
+			log.Panic()
+		}
+		bc.CurrentBlock = curb
+	} else {
+		bc.Storage.AddBlock(gb)
+		newestHash, err := bc.Storage.GetNewestBlockHash()
+		if err != nil {
+			log.Panic()
+		}
+		curb, err := bc.Storage.GetBlock(newestHash)
+		if err != nil {
+			log.Panic()
+		}
+		bc.CurrentBlock = curb
+		bc.Phantom.AddBlockByStringName("Genesis", gb)
+		bc.Phantom.GenesisHash = gb.Hash
 	}
-	curb, err := bc.Storage.GetBlock(newestHash)
-	if err != nil {
-		log.Panic()
-	}
-	bc.CurrentBlock = curb
 }
 
 // 每个节点本地的区块链
 // add a block
 func (bc *BlockChain) AddBlock(b *core.Block) {
-	if b.Header.Number != bc.CurrentBlock.Header.Number+1 {
-		fmt.Println("the block height is not correct")
-		return
+	if !bc.isDAG {
+		if b.Header.Number != bc.CurrentBlock.Header.Number+1 {
+			fmt.Println("the block height is not correct")
+			return
+		}
+		// if this block is mined by the node, the transactions is no need to be handled again
+		if b.Header.Miner != bc.ChainConfig.NodeID {
+			rt := bc.GetUpdateStatusTrie(b.Body)
+			fmt.Println(bc.CurrentBlock.Header.Number+1, "the root = ", rt.Bytes())
+		}
+		bc.CurrentBlock = b
+		bc.Storage.AddBlock(b)
+	} else {
+		if b.Header.Number != bc.CurrentBlock.Header.Number+1 {
+			fmt.Println("the block height is not correct")
+			return
+		}
+		// if this block is mined by the node, the transactions is no need to be handled again
+		if b.Header.Miner != bc.ChainConfig.NodeID {
+			rt := bc.GetUpdateStatusTrie(b.Body)
+			fmt.Println(bc.CurrentBlock.Header.Number+1, "the root = ", rt.Bytes())
+		}
+		bc.CurrentBlock = b
+		//存储添加
+		bc.Storage.AddBlock(b)
+		//图结构添加
+		bc.Phantom.AddBlockByHash(b.Hash, b)
 	}
-	// if this block is mined by the node, the transactions is no need to be handled again
-	if b.Header.Miner != bc.ChainConfig.NodeID {
-		rt := bc.GetUpdateStatusTrie(b.Body)
-		fmt.Println(bc.CurrentBlock.Header.Number+1, "the root = ", rt.Bytes())
-	}
-	bc.CurrentBlock = b
-	bc.Storage.AddBlock(b)
 }
 
 // new a blockchain.
 // the ChainConfig is pre-defined to identify the blockchain; the db is the status trie database in disk
-func NewBlockChain(cc *params.ChainConfig, db ethdb.Database) (*BlockChain, error) {
-	fmt.Println("Generating a new blockchain", db)
-	bc := &BlockChain{
-		db:           db,
-		ChainConfig:  cc,
-		Txpool:       core.NewTxPool(),
-		Storage:      storage.NewStorage(cc),
-		PartitionMap: make(map[string]uint64),
-	}
-	curHash, err := bc.Storage.GetNewestBlockHash()
-	if err != nil {
-		fmt.Println("Get newest block hash err")
-		// if the Storage bolt database cannot find the newest blockhash,
-		// it means the blockchain should be built in height = 0
-		if err.Error() == "cannot find the newest block hash" {
-			genisisBlock := bc.NewGenisisBlock()
-			bc.AddGenisisBlock(genisisBlock)
-			fmt.Println("New genisis block")
-			return bc, nil
+func NewBlockChain(cc *params.ChainConfig, db ethdb.Database, isDAG bool) (*BlockChain, error) {
+
+	if !isDAG {
+
+		fmt.Println("Generating a new blockchain", db)
+		bc := &BlockChain{
+			db:           db,
+			ChainConfig:  cc,
+			Txpool:       core.NewTxPool(),
+			Storage:      storage.NewStorage(cc),
+			PartitionMap: make(map[string]uint64),
 		}
-		log.Panic()
-	}
+		curHash, err := bc.Storage.GetNewestBlockHash()
+		if err != nil {
+			fmt.Println("Get newest block hash err")
+			// if the Storage bolt database cannot find the newest blockhash,
+			// it means the blockchain should be built in height = 0
+			if err.Error() == "cannot find the newest block hash" {
+				genisisBlock := bc.NewGenisisBlock()
+				bc.AddGenisisBlock(genisisBlock)
+				fmt.Println("New genisis block")
+				return bc, nil
+			}
+			log.Panic()
+		}
 
-	// there is a blockchain in the storage
-	//重新建立/找到数据库？
-	fmt.Println("Existing blockchain found")
-	curb, err := bc.Storage.GetBlock(curHash)
-	if err != nil {
-		log.Panic()
-	}
+		// there is a blockchain in the storage
+		//重新建立/找到数据库？
+		fmt.Println("Existing blockchain found")
+		curb, err := bc.Storage.GetBlock(curHash)
+		if err != nil {
+			log.Panic()
+		}
 
-	bc.CurrentBlock = curb
-	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{
-		Cache:     0,
-		Preimages: true,
-	})
-	bc.triedb = triedb
-	// check the existence of the trie database
-	_, err = trie.New(trie.TrieID(common.BytesToHash(curb.Header.StateRoot)), triedb)
-	if err != nil {
-		log.Panic()
+		bc.CurrentBlock = curb
+		triedb := trie.NewDatabaseWithConfig(db, &trie.Config{
+			Cache:     0,
+			Preimages: true,
+		})
+		bc.triedb = triedb
+		// check the existence of the trie database
+		var trieId = trie.TrieID(common.BytesToHash(curb.Header.StateRoot))
+		_, err = trie.New(trieId, triedb)
+		if err != nil {
+			log.Panic()
+		}
+		fmt.Println("The status trie can be built")
+		fmt.Println("Generated a new blockchain successfully")
+		return bc, nil
+	} else {
+		fmt.Println("Generating a new blockchain", db)
+		bc := &BlockChain{
+			db:           db,
+			ChainConfig:  cc,
+			Txpool:       core.NewTxPool(),
+			Storage:      storage.NewStorage(cc),
+			PartitionMap: make(map[string]uint64),
+			isDAG:        true,
+			Phantom:      DAGBlock.NewPhantom(3),
+		}
+		curHash, err := bc.Storage.GetNewestBlockHash()
+		if err != nil {
+			fmt.Println("Get newest block hash err")
+			// if the Storage bolt database cannot find the newest blockhash,
+			// it means the blockchain should be built in height = 0
+			if err.Error() == "cannot find the newest block hash" {
+				genisisBlock := bc.NewGenisisBlock()
+				bc.AddGenisisBlock(genisisBlock)
+				fmt.Println("New genisis block")
+				return bc, nil
+			}
+			log.Panic()
+		}
+
+		// there is a blockchain in the storage
+		//重新建立/找到数据库？
+		fmt.Println("Existing blockchain found")
+		curb, err := bc.Storage.GetBlock(curHash)
+		if err != nil {
+			log.Panic()
+		}
+
+		bc.CurrentBlock = curb
+		triedb := trie.NewDatabaseWithConfig(db, &trie.Config{
+			Cache:     0,
+			Preimages: true,
+		})
+		bc.triedb = triedb
+		// check the existence of the trie database
+		_, err = trie.New(trie.TrieID(common.BytesToHash(curb.Header.StateRoot)), triedb)
+		if err != nil {
+			log.Panic()
+		}
+		fmt.Println("The status trie can be built")
+		fmt.Println("Generated a new blockchain successfully")
+		return bc, nil
 	}
-	fmt.Println("The status trie can be built")
-	fmt.Println("Generated a new blockchain successfully")
-	return bc, nil
 }
 
 // check a block is valid or not in this blockchain config
@@ -332,6 +480,14 @@ func (bc *BlockChain) AddAccounts(ac []string, as []*core.AccountState) {
 	b.Header.Miner = 0
 	b.Hash = b.Header.Hash()
 
+	b.Header.DagData = &core.DAGStructureData{
+		Name:          string(b.Hash),
+		Score:         -1,
+		SizeOfPastSet: -1,
+		Prev:          nil,
+		Blue:          nil,
+	}
+
 	bc.CurrentBlock = b
 	bc.Storage.AddBlock(b)
 }
@@ -375,6 +531,8 @@ func (bc *BlockChain) PrintBlockChain() string {
 		bc.CurrentBlock.Header.StateRoot,
 		bc.CurrentBlock.Header.Time,
 		bc.triedb,
+		bc.isDAG,
+		bc.Phantom,
 		// len(bc.Txpool.RelayPool[1]),
 	}
 	res := fmt.Sprintf("%v\n", vals)

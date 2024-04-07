@@ -121,3 +121,11 @@ type DAGStructureData struct {
 	Prev          map[string]*Block
 	Blue          map[string]bool
 }
+
+func (dagData *DAGStructureData) GetParentsNames() []string {
+	var parentsNames []string
+	for k, _ := range dagData.Prev {
+		parentsNames = append(parentsNames, k)
+	}
+	return parentsNames
+}

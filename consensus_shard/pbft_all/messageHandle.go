@@ -30,6 +30,7 @@ func (p *PbftConsensusNode) Propose() {
 		// propose
 		// implement interface to generate propose
 		_, r := p.ihm.HandleinPropose()
+		//生成区块，打包进消息
 
 		digest := getDigest(r)
 		p.requestPool[string(digest)] = r
@@ -70,6 +71,8 @@ func (p *PbftConsensusNode) handlePrePrepare(content []byte) {
 	} else {
 		// do your operation in this interface
 		flag = p.ihm.HandleinPrePrepare(ppmsg)
+		//检查区块合法性
+
 		p.requestPool[string(getDigest(ppmsg.RequestMsg))] = ppmsg.RequestMsg
 		p.height2Digest[ppmsg.SeqID] = string(getDigest(ppmsg.RequestMsg))
 	}
@@ -300,4 +303,69 @@ func (p *PbftConsensusNode) handleSendOldSeq(content []byte) {
 	}
 
 	p.askForLock.Unlock()
+}
+
+func (p *PbftConsensusNode) MineDAGBlock() {
+	for {
+		select {
+		case <-p.pStop:
+			p.pl.Plog.Printf("S%dN%d stop...\n", p.ShardID, p.NodeID)
+			return
+		default:
+		}
+		intervalTime := randomInRange(p.pbftChainConfig.BlockInterval, 2*p.pbftChainConfig.BlockInterval)
+		//每5s由Leader提议，生成一个区块
+		time.Sleep(time.Duration(intervalTime) * time.Millisecond)
+
+		p.sequenceLock.Lock()
+		p.pl.Plog.Printf("S%dN%d get sequenceLock locked, now trying to Mine DAG Blocks...\n", p.ShardID, p.NodeID)
+
+		// implement interface to generate propose
+		_, r := p.ihm.HandleinDAGMineBlock()
+		//生成区块，打包进消息
+		digest := getDigest(r)
+		p.requestPool[string(digest)] = r
+		p.pl.Plog.Printf("S%dN%d put the request into the pool ...\n", p.ShardID, p.NodeID)
+
+		DAGSendBlockMsg := message.DAGSendBlock{
+			RequestMsg: r,
+			Digest:     digest,
+			SeqID:      p.sequenceID,
+		}
+		p.height2Digest[p.sequenceID] = string(digest)
+		// marshal and broadcast
+		DAGSendBlockMsgBytes, err := json.Marshal(DAGSendBlockMsg)
+		if err != nil {
+			log.Panic()
+		}
+		msg_send := message.MergeMessage(message.CGhostDAGSendBlock, DAGSendBlockMsgBytes)
+		networks.Broadcast(p.RunningNode.IPaddr, p.getNeighborNodes(), msg_send)
+	}
+}
+
+func (p *PbftConsensusNode) handleDAGReceiveBlock(content []byte) {
+	//fetches blocks
+	p.RunningNode.PrintNode()
+	fmt.Println("received the DAG Block ...")
+	// decode the message
+	DAGBlockMsg := new(message.DAGSendBlock)
+	err := json.Unmarshal(content, DAGBlockMsg)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	if digest := getDigest(DAGBlockMsg.RequestMsg); string(digest) != string(DAGBlockMsg.Digest) {
+		p.pl.Plog.Printf("S%dN%d : the digest is not consistent, so refuse to add DAG Block. \n", p.ShardID, p.NodeID)
+	}
+
+	flag := p.ihm.HandleinDAGReceiveBlock(DAGBlockMsg)
+	//检查区块合法性
+
+	if flag {
+		// true then add block
+
+	} else {
+
+	}
+
 }

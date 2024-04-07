@@ -8,6 +8,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"log"
+	"math/rand"
 	"os"
 	"strconv"
 )
@@ -85,4 +86,11 @@ func getDigest(r *message.Request) []byte {
 	}
 	hash := sha256.Sum256(b)
 	return hash[:]
+}
+
+func randomInRange(min, max uint64) uint64 {
+	// 生成一个[0.0, 1.0)区间内的随机浮点数
+	randomValue := rand.Uint64()
+	// 将随机值映射到[min, max]区间内
+	return min + randomValue*(max-min)
 }

@@ -1,15 +1,20 @@
 package test_DAG
 
 import (
+	"blockEmulator/chain"
 	"blockEmulator/consensus_shard/GhostDAG_all/DAGBlock"
+	"blockEmulator/params"
 	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"log"
 	"testing"
 )
 
 func chainFig2Initialize(p *DAGBlock.Phantom) DAGBlock.MapBlocks {
 
 	//add blocks
+
 	DAGBlock.ChainAddBlock("Genesis", []string{}, p)
 
 	DAGBlock.ChainAddBlock("B", []string{"Genesis"}, p)
@@ -42,24 +47,39 @@ func TestFig2(t *testing.T) {
 	fmt.Println("\n-  BlockDAG Algorithms Simulation - Algorithm 2: Ordering of the DAG.   -")
 	fmt.Println("-        The example on Fig.2         -")
 
-	p := DAGBlock.NewPhantom(3)
+	fp := "./record/ldb/s0/N0"
+	db, err := rawdb.NewLevelDBDatabase(fp, 0, 1, "accountState", false)
+	if err != nil {
+		log.Panic(err)
+	}
+	params.ShardNum = 1
+	pcc := &params.ChainConfig{
+		ChainID:        uint64(0),
+		NodeID:         0,
+		ShardID:        uint64(0),
+		Nodes_perShard: uint64(1),
+		ShardNums:      4,
+		BlockSize:      uint64(params.MaxBlockSize_global),
+		BlockInterval:  uint64(params.Block_Interval),
+		InjectSpeed:    uint64(params.InjectSpeed),
+	}
+	dagBlockChain, _ := chain.NewBlockChain(pcc, db, true)
 
-	chain := chainFig2Initialize(p)
-
+	chain := chainFig2Initialize(dagBlockChain.Phantom)
 	fmt.Println("chainInitialize(): done. blocks=", len(chain)-1)
 
-	orderedList := p.Order(chain, 3)
+	orderedList := dagBlockChain.Phantom.Order(chain, 3)
 
 	// print the result of blue sets
 
-	ltpq := p.LTPQ(chain, true)
+	ltpq := dagBlockChain.Phantom.LTPQ(chain, true)
 
 	fmt.Print("blue set selection done. blue blocks = ")
 	nBlueBlocks := 0
 	actual.Reset()
 	for _, name := range ltpq {
 		block := chain[name]
-		if p.IsBlueBlock(block) == true {
+		if dagBlockChain.Phantom.IsBlueBlock(block) == true {
 			if name == "Genesis" || name == "Virtual" {
 				actual.WriteString(fmt.Sprintf("(%s).", name[:1]))
 			} else {

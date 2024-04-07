@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"time"
 )
 
 type MapBlocks = map[string]*core.Block
@@ -24,37 +23,41 @@ type Phantom struct {
 // NewPhantom 创建并初始化一个新的 Phantom 实例
 func NewPhantom(k int) *Phantom {
 	// 示例：创建创世区块并将其添加到 DAG
-	genesisBlock := &core.Block{
-		Header: &core.BlockHeader{
-			Number: 0,
-			Time:   time.Unix(0, 0),
-		},
-		Body: nil,
-		Hash: nil, // 创世区块的哈希通常设置为特定的值，如空哈希或零哈希
-	}
+
 	p := Phantom{
 		G:           make(MapBlocks),
 		Tips:        make(MapBlocks),
 		Blues:       make(MapBlocks),
 		Next:        make(map[string]MapBlocks),
-		GenesisHash: genesisBlock.Hash,
-		k:           0,
+		GenesisHash: nil,
+		k:           k,
 	}
-
-	p.G["Genesis"] = genesisBlock
-
 	return &p
 }
 
-func (p *Phantom) AddBlockByStringName(blockHash string, block *core.Block) {
+func (p *Phantom) AddBlockByStringName(blockHashStr string, thisBlock *core.Block) {
+	References := thisBlock.Header.DagData.GetParentsNames()
+	//为next添加新区块的键值对
+	p.Next[blockHashStr] = make(MapBlocks)
+	//add references
+	for _, Reference := range References {
+		prev, ok := p.G[Reference]
+		if ok {
+			thisBlock.Header.DagData.Prev[Reference] = prev
+			if len(p.Next[prev.Header.DagData.Name]) == 0 {
+				p.Next[prev.Header.DagData.Name] = make(MapBlocks)
+			}
+			p.Next[prev.Header.DagData.Name][blockHashStr] = thisBlock
+		} else {
+			fmt.Println("chainAddBlock(): error! block reference invalid. block name =", blockHashStr, " references=", Reference)
+			os.Exit(-1)
+		}
+	}
 
-	//1.添加block，设置prev(past)
-	//2. 给prev block添加next(future)
-
-	block.Header.DagData.SizeOfPastSet = p.SizeOfPastSet(block)
+	thisBlock.Header.DagData.SizeOfPastSet = p.SizeOfPastSet(thisBlock)
 
 	//add this block to the chain
-	p.G[blockHash] = block
+	p.G[blockHashStr] = thisBlock
 }
 func (p *Phantom) AddBlockByHash(blockHash []byte, block *core.Block) {
 	blockHashStr := string(blockHash)
@@ -322,6 +325,7 @@ func (p *Phantom) CalcBlue(Graph MapBlocks, k int, topTip *core.Block) {
 
 }
 
+// 取交集
 func (p *Phantom) Intersection(A MapBlocks, B MapBlocks) MapBlocks {
 
 	intersection := make(MapBlocks)

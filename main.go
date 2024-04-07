@@ -14,6 +14,7 @@ var (
 	modID    int
 	isClient bool
 	isGen    bool
+	isDAG    bool
 )
 
 func main() {
@@ -24,6 +25,7 @@ func main() {
 	pflag.IntVarP(&modID, "modID", "m", 3, "choice Committee Method,for example, 0, [CLPA_Broker,CLPA,Broker,Relay] ")
 	pflag.BoolVarP(&isClient, "client", "c", false, "whether this node is a client")
 	pflag.BoolVarP(&isGen, "gen", "g", false, "generation bat")
+	pflag.BoolVarP(&isDAG, "dag", "d", false, "is dag block")
 	pflag.Parse()
 
 	if isGen {
@@ -35,6 +37,6 @@ func main() {
 	if isClient {
 		build.BuildSupervisor(uint64(nodeNum), uint64(shardNum), uint64(modID))
 	} else {
-		build.BuildNewPbftNode(uint64(nodeID), uint64(nodeNum), uint64(shardID), uint64(shardNum), uint64(modID))
+		build.BuildNewPbftNode(uint64(nodeID), uint64(nodeNum), uint64(shardID), uint64(shardNum), uint64(modID), isDAG)
 	}
 }

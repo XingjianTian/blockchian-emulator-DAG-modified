@@ -19,6 +19,16 @@ type RawBrokerPbftExtraHandleMod struct {
 	pbftNode *PbftConsensusNode
 }
 
+func (rbhm *RawBrokerPbftExtraHandleMod) HandleinDAGMineBlock() (bool, *message.Request) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (rbhm *RawBrokerPbftExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *message.Request) bool {
+	//TODO implement me
+	panic("implement me")
+}
+
 // propose request with different types
 func (rbhm *RawBrokerPbftExtraHandleMod) HandleinPropose() (bool, *message.Request) {
 	// new blocks

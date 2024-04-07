@@ -20,6 +20,16 @@ type RawRelayPbftExtraHandleMod struct {
 	// pointer to pbft data
 }
 
+func (rphm *RawRelayPbftExtraHandleMod) HandleinDAGMineBlock() (bool, *message.Request) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (rphm *RawRelayPbftExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *message.Request) bool {
+	//TODO implement me
+	panic("implement me")
+}
+
 // propose request with different types
 func (rphm *RawRelayPbftExtraHandleMod) HandleinPropose() (bool, *message.Request) {
 	// new blocks

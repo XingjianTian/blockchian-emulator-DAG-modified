@@ -26,6 +26,11 @@ const (
 
 	CBlockInfo MessageType = "BlockInfo"
 	CSeqIDinfo MessageType = "SequenceID"
+
+	//ghost dag
+	CGhostDAGSendBlock MessageType = "GhostDAGSendBlock"
+
+	CGhostDAGReceiveBlock MessageType = "GhostDAGReceiveBlock"
 )
 
 var (
@@ -132,4 +137,13 @@ func SplitMessage(message []byte) (MessageType, []byte) {
 	msgType := string(msgType_pruned)
 	content := message[prefixMSGtypeLen:]
 	return MessageType(msgType), content
+}
+
+type DAGSendBlock struct {
+	RequestMsg *Request // the request message should be pre-prepared
+	Digest     []byte   // the digest of this request, which is the only identifier
+	SeqID      uint64
+}
+
+type DAGReceiveBlock struct {
 }

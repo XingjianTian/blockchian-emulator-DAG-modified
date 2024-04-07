@@ -18,6 +18,16 @@ type CLPAPbftInsideExtraHandleMod struct {
 	pbftNode *PbftConsensusNode
 }
 
+func (cphm *CLPAPbftInsideExtraHandleMod) HandleinDAGMineBlock() (bool, *message.Request) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cphm *CLPAPbftInsideExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *message.Request) bool {
+	//TODO implement me
+	panic("implement me")
+}
+
 // propose request with different types
 func (cphm *CLPAPbftInsideExtraHandleMod) HandleinPropose() (bool, *message.Request) {
 	if cphm.cdm.PartitionOn {

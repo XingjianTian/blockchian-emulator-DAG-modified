@@ -51,8 +51,8 @@ func BuildSupervisor(nnm, snm, mod uint64) {
 	lsn.TcpListen()
 }
 
-func BuildNewPbftNode(nid, nnm, sid, snm, mod uint64) {
-	worker := pbft_all.NewPbftNode(sid, nid, initConfig(nid, nnm, sid, snm), params.CommitteeMethod[mod])
+func BuildNewPbftNode(nid, nnm, sid, snm, mod uint64, isDAG bool) {
+	worker := pbft_all.NewPbftNode(sid, nid, initConfig(nid, nnm, sid, snm), params.CommitteeMethod[mod], isDAG)
 	if nid == 0 {
 		go worker.Propose()
 		worker.TcpListen()

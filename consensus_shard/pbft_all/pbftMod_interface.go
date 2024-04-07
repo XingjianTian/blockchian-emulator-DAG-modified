@@ -15,6 +15,12 @@ type ExtraOpInConsensus interface {
 	HandleReqestforOldSeq(*message.RequestOldMessage) bool
 	// do for need
 	HandleforSequentialRequest(*message.SendOldMessage) bool
+
+	//Ghost DAG
+	HandleinDAGMineBlock() (bool, *message.Request)
+	//生成区块，打包进消息
+	// confirming
+	HandleinDAGReceiveBlock(receivedBlock *message.DAGSendBlock) bool
 }
 
 type OpInterShards interface {

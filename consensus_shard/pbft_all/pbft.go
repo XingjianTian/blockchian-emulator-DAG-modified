@@ -71,11 +71,14 @@ type PbftConsensusNode struct {
 
 	// to handle the message outside of pbft
 	ohm OpInterShards
+
+	isDAG bool
 }
 
 // generate a pbft consensus for a node
-func NewPbftNode(shardID, nodeID uint64, pcc *params.ChainConfig, messageHandleType string) *PbftConsensusNode {
+func NewPbftNode(shardID, nodeID uint64, pcc *params.ChainConfig, messageHandleType string, isDAG bool) *PbftConsensusNode {
 	p := new(PbftConsensusNode)
+	p.isDAG = isDAG
 	p.ip_nodeTable = params.IPmap_nodeTable
 	p.node_nums = pcc.Nodes_perShard
 	p.ShardID = shardID
@@ -87,7 +90,7 @@ func NewPbftNode(shardID, nodeID uint64, pcc *params.ChainConfig, messageHandleT
 	if err != nil {
 		log.Panic(err)
 	}
-	p.CurChain, err = chain.NewBlockChain(pcc, p.db)
+	p.CurChain, err = chain.NewBlockChain(pcc, p.db, isDAG)
 	if err != nil {
 		log.Panic("cannot new a blockchain")
 	}
@@ -152,6 +155,8 @@ func NewPbftNode(shardID, nodeID uint64, pcc *params.ChainConfig, messageHandleT
 		}
 	}
 
+	//if is DAG, change p.ihm
+
 	return p
 }
 
@@ -172,6 +177,8 @@ func (p *PbftConsensusNode) handleMessage(msg []byte) {
 		p.handleSendOldSeq(content)
 	case message.CStop:
 		p.WaitToStop()
+	case message.CGhostDAGSendBlock:
+		p.handleDAGReceiveBlock()
 
 	// handle the message from outside
 	default:

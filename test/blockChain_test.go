@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
-func TestBlockChain(ShardNums int) {
+func TestBlockChain(t *testing.T) {
+	var ShardNums int = 2
+	print(ShardNums)
 	accounts := []string{"000000000001", "00000000002", "00000000003", "00000000004", "00000000005", "00000000006"}
 	as := make([]*core.AccountState, 0)
 	for idx := range accounts {
