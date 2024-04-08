@@ -142,7 +142,6 @@ func SplitMessage(message []byte) (MessageType, []byte) {
 type DAGSendBlock struct {
 	RequestMsg *Request // the request message should be pre-prepared
 	Digest     []byte   // the digest of this request, which is the only identifier
-	SeqID      uint64
 }
 
 type DAGReceiveBlock struct {

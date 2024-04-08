@@ -24,7 +24,7 @@ func (rbhm *RawBrokerPbftExtraHandleMod) HandleinDAGMineBlock() (bool, *message.
 	panic("implement me")
 }
 
-func (rbhm *RawBrokerPbftExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *message.Request) bool {
+func (rbhm *RawBrokerPbftExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *message.DAGSendBlock) bool {
 	//TODO implement me
 	panic("implement me")
 }

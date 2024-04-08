@@ -83,7 +83,7 @@ func Ttestresult(ShardNums int) {
 			BlockInterval:  uint64(params.Block_Interval),
 			InjectSpeed:    uint64(params.InjectSpeed),
 		}
-		CurChain, _ := chain.NewBlockChain(pcc, db)
+		CurChain, _ := chain.NewBlockChain(pcc, db, true)
 		for key, val := range accountBalance {
 			v := CurChain.FetchAccounts([]string{key})
 			if val.Cmp(v[0].Balance) == 0 {

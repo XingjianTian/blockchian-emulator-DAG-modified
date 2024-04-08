@@ -7,12 +7,36 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
+func DeleteFolder(folderPath string) {
+	// 检查文件夹是否存在
+	if _, err := os.Stat(folderPath); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("The folder does not exist, so it cannot be deleted.")
+		} else {
+			fmt.Println("An error occurred while checking the folder:", err)
+		}
+		return
+	}
+
+	// 删除文件夹
+	err := os.RemoveAll(folderPath)
+	if err != nil {
+		fmt.Println("An error occurred while deleting the folder:", err)
+	} else {
+		fmt.Println("The folder has been successfully deleted.")
+	}
+}
+
 func TestBlockChain(t *testing.T) {
+
+	DeleteFolder("./record")
+
 	var ShardNums int = 2
 	print(ShardNums)
 	accounts := []string{"000000000001", "00000000002", "00000000003", "00000000004", "00000000005", "00000000006"}
@@ -39,7 +63,7 @@ func TestBlockChain(t *testing.T) {
 			BlockInterval:  uint64(params.Block_Interval),
 			InjectSpeed:    uint64(params.InjectSpeed),
 		}
-		CurChain, _ := chain.NewBlockChain(pcc, db)
+		CurChain, _ := chain.NewBlockChain(pcc, db, true)
 		CurChain.PrintBlockChain()
 		CurChain.AddAccounts(accounts, as)
 		CurChain.PrintBlockChain()
@@ -48,6 +72,11 @@ func TestBlockChain(t *testing.T) {
 		for _, state := range astates {
 			fmt.Println(state.Balance)
 		}
+
+		//test
+
 		CurChain.CloseBlockChain()
+		DeleteFolder("./record")
+
 	}
 }

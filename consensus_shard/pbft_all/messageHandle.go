@@ -317,8 +317,8 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 		//每5s由Leader提议，生成一个区块
 		time.Sleep(time.Duration(intervalTime) * time.Millisecond)
 
-		p.sequenceLock.Lock()
-		p.pl.Plog.Printf("S%dN%d get sequenceLock locked, now trying to Mine DAG Blocks...\n", p.ShardID, p.NodeID)
+		//p.sequenceLock.Lock()
+		p.pl.Plog.Printf("S%dN%d now trying to Mine DAG Blocks...\n", p.ShardID, p.NodeID)
 
 		// implement interface to generate propose
 		_, r := p.ihm.HandleinDAGMineBlock()
@@ -330,15 +330,15 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 		DAGSendBlockMsg := message.DAGSendBlock{
 			RequestMsg: r,
 			Digest:     digest,
-			SeqID:      p.sequenceID,
 		}
-		p.height2Digest[p.sequenceID] = string(digest)
 		// marshal and broadcast
 		DAGSendBlockMsgBytes, err := json.Marshal(DAGSendBlockMsg)
 		if err != nil {
 			log.Panic()
 		}
 		msg_send := message.MergeMessage(message.CGhostDAGSendBlock, DAGSendBlockMsgBytes)
+		//test
+		p.handleMessage(msg_send)
 		networks.Broadcast(p.RunningNode.IPaddr, p.getNeighborNodes(), msg_send)
 	}
 }
@@ -346,26 +346,19 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 func (p *PbftConsensusNode) handleDAGReceiveBlock(content []byte) {
 	//fetches blocks
 	p.RunningNode.PrintNode()
-	fmt.Println("received the DAG Block ...")
+	fmt.Println("received the DAG Block msg ...")
 	// decode the message
-	DAGBlockMsg := new(message.DAGSendBlock)
-	err := json.Unmarshal(content, DAGBlockMsg)
+	DAGBlockmsg := new(message.DAGSendBlock)
+	err := json.Unmarshal(content, DAGBlockmsg)
 	if err != nil {
 		log.Panic(err)
 	}
-
-	if digest := getDigest(DAGBlockMsg.RequestMsg); string(digest) != string(DAGBlockMsg.Digest) {
-		p.pl.Plog.Printf("S%dN%d : the digest is not consistent, so refuse to add DAG Block. \n", p.ShardID, p.NodeID)
-	}
-
-	flag := p.ihm.HandleinDAGReceiveBlock(DAGBlockMsg)
-	//检查区块合法性
-
-	if flag {
-		// true then add block
-
+	if digest := getDigest(DAGBlockmsg.RequestMsg); string(digest) != string(DAGBlockmsg.Digest) {
+		p.pl.Plog.Printf("S%dN%d : the digest is not consistent, so refuse to prepare. \n", p.ShardID, p.NodeID)
 	} else {
-
+		// do your operation in this interface
+		//检查区块合法性，添加上链，区分分片交易
+		_ = p.ihm.HandleinDAGReceiveBlock(DAGBlockmsg)
 	}
 
 }

@@ -90,7 +90,8 @@ func getDigest(r *message.Request) []byte {
 
 func randomInRange(min, max uint64) uint64 {
 	// 生成一个[0.0, 1.0)区间内的随机浮点数
-	randomValue := rand.Uint64()
+	//randomValue := rand.Float64()
 	// 将随机值映射到[min, max]区间内
-	return min + randomValue*(max-min)
+	randomValue := uint64(rand.Int63n(int64(max-min+1))) + min
+	return randomValue
 }

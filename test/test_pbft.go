@@ -48,7 +48,7 @@ func TestPBFT(nid, nnm, sid, snm uint64) {
 		return
 	}
 
-	worker := pbft_all.NewPbftNode(sid, nid, pcc, "Relay")
+	worker := pbft_all.NewPbftNode(sid, nid, pcc, "Relay", false)
 	time.Sleep(5 * time.Second)
 	if nid == 0 {
 		go worker.Propose()

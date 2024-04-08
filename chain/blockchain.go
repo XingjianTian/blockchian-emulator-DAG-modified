@@ -207,6 +207,9 @@ func (bc *BlockChain) GenerateBlock() *core.Block {
 		}
 
 		//设置b的真正的ParentHashes
+		//引用当前节点观察到的DAG的全部tip作为父节点
+		tips := bc.Phantom.FindTips(bc.Phantom.G)
+		b.Header.DagData.Prev = tips
 
 		return b
 	}
@@ -334,6 +337,7 @@ func NewBlockChain(cc *params.ChainConfig, db ethdb.Database, isDAG bool) (*Bloc
 			Txpool:       core.NewTxPool(),
 			Storage:      storage.NewStorage(cc),
 			PartitionMap: make(map[string]uint64),
+			isDAG:        false,
 		}
 		curHash, err := bc.Storage.GetNewestBlockHash()
 		if err != nil {
@@ -437,7 +441,6 @@ func (bc *BlockChain) IsValidBlock(b *core.Block) error {
 // add accounts
 func (bc *BlockChain) AddAccounts(ac []string, as []*core.AccountState) {
 	fmt.Printf("The len of accounts is %d, now adding the accounts\n", len(ac))
-
 	bh := &core.BlockHeader{
 		ParentBlockHash: bc.CurrentBlock.Hash,
 		Number:          bc.CurrentBlock.Header.Number + 1,
@@ -488,8 +491,16 @@ func (bc *BlockChain) AddAccounts(ac []string, as []*core.AccountState) {
 		Blue:          nil,
 	}
 
+	//设置b的真正的ParentHashes
+	//引用当前节点观察到的DAG的全部tip作为父节点
+	tips := bc.Phantom.FindTips(bc.Phantom.G)
+	b.Header.DagData.Prev = tips
+
 	bc.CurrentBlock = b
 	bc.Storage.AddBlock(b)
+	//图结构添加
+	bc.Phantom.AddBlockByHash(b.Hash, b)
+
 }
 
 // fetch accounts

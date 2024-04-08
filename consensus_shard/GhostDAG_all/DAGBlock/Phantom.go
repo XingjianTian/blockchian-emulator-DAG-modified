@@ -185,7 +185,6 @@ func (p *Phantom) SizeOfPastSet(B *core.Block) int {
 // lexicographical topological priority queue
 //返回按字典序拓扑排序的节点优先级队列。
 //拓扑排序是节点的非唯一排列，使得从 u 到 v 的边意味着 u 在拓扑排序顺序中出现在 v 之前。
-//从highest score开始
 
 func (p *Phantom) LTPQ(Graph MapBlocks, ascending bool) []string {
 

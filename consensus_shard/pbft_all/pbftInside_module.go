@@ -21,13 +21,110 @@ type RawRelayPbftExtraHandleMod struct {
 }
 
 func (rphm *RawRelayPbftExtraHandleMod) HandleinDAGMineBlock() (bool, *message.Request) {
-	//TODO implement me
-	panic("implement me")
+	//Mine Block
+	block := rphm.pbftNode.CurChain.GenerateBlock()
+	r := &message.Request{
+		RequestType: message.BlockRequest,
+		ReqTime:     time.Now(),
+	}
+	r.Msg.Content = block.Encode()
+
+	rphm.pbftNode.CurChain.AddBlock(block)
+
+	return true, r
 }
 
-func (rphm *RawRelayPbftExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *message.Request) bool {
-	//TODO implement me
-	panic("implement me")
+func (rphm *RawRelayPbftExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *message.DAGSendBlock) bool {
+	flag := true
+
+	r := receivedBlock.RequestMsg
+	//r := rphm.pbftNode.requestPool[string(receivedBlock.Digest)]
+	// requestType ...
+	block := core.DecodeB(r.Msg.Content)
+
+	if rphm.pbftNode.CurChain.IsValidBlock(block) != nil {
+		rphm.pbftNode.pl.Plog.Printf("S%dN%d : not a valid DAG block\n", rphm.pbftNode.ShardID, rphm.pbftNode.NodeID)
+		flag = false
+	}
+	rphm.pbftNode.pl.Plog.Printf("S%dN%d : the DAGSendBlock message is correct, putting it into the RequestPool. \n", rphm.pbftNode.ShardID, rphm.pbftNode.NodeID)
+	rphm.pbftNode.requestPool[string(receivedBlock.Digest)] = receivedBlock.RequestMsg
+	//
+	//Block Valid And Verified，Continue to Add Block
+	if flag {
+		rphm.pbftNode.pl.Plog.Printf("S%dN%d : adding the block %d...now height = %d \n", rphm.pbftNode.ShardID, rphm.pbftNode.NodeID, block.Header.Number, rphm.pbftNode.CurChain.CurrentBlock.Header.Number)
+		rphm.pbftNode.CurChain.AddBlock(block)
+		rphm.pbftNode.pl.Plog.Printf("S%dN%d : added the block %d... \n", rphm.pbftNode.ShardID, rphm.pbftNode.NodeID, block.Header.Number)
+		rphm.pbftNode.CurChain.PrintBlockChain()
+
+		// now try to relay txs to other shards (for main nodes)
+		//RELAY DAG (for more than main nodes than pbft)
+		//if rphm.pbftNode.NodeID == rphm.pbftNode.view {
+		rphm.pbftNode.pl.Plog.Printf("S%dN%d : main node is trying to send relay txs at height = %d \n", rphm.pbftNode.ShardID, rphm.pbftNode.NodeID, block.Header.Number)
+		// generate relay pool and collect txs excuted
+		txExcuted := make([]*core.Transaction, 0)
+		rphm.pbftNode.CurChain.Txpool.RelayPool = make(map[uint64][]*core.Transaction)
+		relay1Txs := make([]*core.Transaction, 0)
+		for _, tx := range block.Body {
+			rsid := rphm.pbftNode.CurChain.Get_PartitionMap(tx.Recipient)
+			if rsid != rphm.pbftNode.ShardID {
+				ntx := tx
+				ntx.Relayed = true
+				rphm.pbftNode.CurChain.Txpool.AddRelayTx(ntx, rsid)
+				relay1Txs = append(relay1Txs, tx)
+			} else {
+				txExcuted = append(txExcuted, tx)
+			}
+		}
+		// send relay txs
+		for sid := uint64(0); sid < rphm.pbftNode.pbftChainConfig.ShardNums; sid++ {
+			if sid == rphm.pbftNode.ShardID {
+				continue
+			}
+			relay := message.Relay{
+				Txs:           rphm.pbftNode.CurChain.Txpool.RelayPool[sid],
+				SenderShardID: rphm.pbftNode.ShardID,
+				SenderSeq:     rphm.pbftNode.sequenceID,
+			}
+			rByte, err := json.Marshal(relay)
+			if err != nil {
+				log.Panic()
+			}
+			msg_send := message.MergeMessage(message.CRelay, rByte)
+			go networks.TcpDial(msg_send, rphm.pbftNode.ip_nodeTable[sid][0])
+			rphm.pbftNode.pl.Plog.Printf("S%dN%d : sended relay txs to %d\n", rphm.pbftNode.ShardID, rphm.pbftNode.NodeID, sid)
+		}
+		rphm.pbftNode.CurChain.Txpool.ClearRelayPool()
+		// send txs excuted in this block to the listener
+		// add more message to measure more metrics
+
+		////todo modify this infoMsg for DAG
+
+		bim := message.BlockInfoMsg{
+			BlockBodyLength: len(block.Body),
+			ExcutedTxs:      txExcuted,
+			Epoch:           0,
+			Relay1Txs:       relay1Txs,
+			Relay1TxNum:     uint64(len(relay1Txs)),
+			SenderShardID:   rphm.pbftNode.ShardID,
+			ProposeTime:     r.ReqTime,
+			CommitTime:      time.Now(),
+		}
+
+		bByte, err := json.Marshal(bim)
+		if err != nil {
+			log.Panic()
+		}
+		msg_send := message.MergeMessage(message.CBlockInfo, bByte)
+		go networks.TcpDial(msg_send, rphm.pbftNode.ip_nodeTable[params.DeciderShard][0])
+		rphm.pbftNode.pl.Plog.Printf("S%dN%d : sended excuted txs\n", rphm.pbftNode.ShardID, rphm.pbftNode.NodeID)
+		rphm.pbftNode.CurChain.Txpool.GetLocked()
+		rphm.pbftNode.writeCSVline([]string{strconv.Itoa(len(rphm.pbftNode.CurChain.Txpool.TxQueue)), strconv.Itoa(len(txExcuted)), strconv.Itoa(int(bim.Relay1TxNum))})
+		rphm.pbftNode.CurChain.Txpool.GetUnlocked()
+		//}
+	}
+
+	return flag
+
 }
 
 // propose request with different types

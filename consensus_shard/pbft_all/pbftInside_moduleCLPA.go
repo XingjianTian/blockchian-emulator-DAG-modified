@@ -23,7 +23,7 @@ func (cphm *CLPAPbftInsideExtraHandleMod) HandleinDAGMineBlock() (bool, *message
 	panic("implement me")
 }
 
-func (cphm *CLPAPbftInsideExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *message.Request) bool {
+func (cphm *CLPAPbftInsideExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *message.DAGSendBlock) bool {
 	//TODO implement me
 	panic("implement me")
 }
