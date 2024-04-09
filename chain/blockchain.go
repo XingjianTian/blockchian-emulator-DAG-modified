@@ -43,8 +43,9 @@ type BlockChain struct {
 	PartitionMap map[string]uint64   // the partition map which is defined by some algorithm can help account partition
 	pmlock       sync.RWMutex
 
-	isDAG   bool
-	Phantom *DAGBlock.Phantom
+	isDAG        bool
+	Phantom      *DAGBlock.Phantom
+	ConfirmedTxs map[string]bool
 }
 
 // Write Partition Map
@@ -67,6 +68,49 @@ func (bc *BlockChain) Get_PartitionMap(key string) uint64 {
 // Send a transaction to the pool (need to decide which pool should be sended)
 func (bc *BlockChain) SendTx2Pool(txs []*core.Transaction) {
 	bc.Txpool.AddTxs2Pool(txs)
+}
+
+func (bc *BlockChain) getAccountState(addr utils.Address) (*core.AccountState, error) {
+	// Implement your logic to fetch the account state from the database
+	// For example, using the trie database
+	st, err := trie.New(trie.TrieID(common.BytesToHash(bc.CurrentBlock.Header.StateRoot)), bc.triedb)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	enc, err := st.Get([]byte(addr))
+	if err != nil {
+		return nil, err
+	}
+	return core.DecodeAS(enc), nil
+}
+
+func (bc *BlockChain) VerifyTransaction(tx *core.Transaction) error {
+	// Check if the transaction is already confirmed
+	if _, ok := bc.ConfirmedTxs[string(tx.TxHash)]; ok {
+		return nil
+	}
+
+	// Check the nonce
+	senderState, err := bc.getAccountState(tx.Sender)
+	if err != nil {
+		return err
+	}
+	if tx.Nonce != senderState.Nonce {
+		return fmt.Errorf("invalid transaction nonce: expected %d, got %d", senderState.Nonce, tx.Nonce)
+	}
+
+	// Check the balance
+	if senderState.Balance.Cmp(tx.Value) < 0 {
+		return fmt.Errorf("insufficient balance: %s has %s, but tx value is %s", tx.Sender, senderState.Balance, tx.Value)
+	}
+
+	// Check the signature (if implemented)
+	// if !tx.VerifySignature() {
+	// 	return errors.New("invalid transaction signature")
+	// }
+
+	return nil
 }
 
 // handle transactions and modify the status trie
@@ -386,6 +430,7 @@ func NewBlockChain(cc *params.ChainConfig, db ethdb.Database, isDAG bool) (*Bloc
 			PartitionMap: make(map[string]uint64),
 			isDAG:        true,
 			Phantom:      DAGBlock.NewPhantom(3),
+			ConfirmedTxs: make(map[string]bool),
 		}
 		curHash, err := bc.Storage.GetNewestBlockHash()
 		if err != nil {
@@ -428,12 +473,38 @@ func NewBlockChain(cc *params.ChainConfig, db ethdb.Database, isDAG bool) (*Bloc
 
 // check a block is valid or not in this blockchain config
 func (bc *BlockChain) IsValidBlock(b *core.Block) error {
-	if string(b.Header.ParentBlockHash) != string(bc.CurrentBlock.Hash) {
-		fmt.Println("the parentblock hash is not equal to the current block hash")
-		return errors.New("the parentblock hash is not equal to the current block hash")
-	} else if string(GetTxTreeRoot(b.Body)) != string(b.Header.TxRoot) {
-		fmt.Println("the transaction root is wrong")
-		return errors.New("the transaction root is wrong")
+	if !bc.isDAG {
+		if string(b.Header.ParentBlockHash) != string(bc.CurrentBlock.Hash) {
+			fmt.Println("the parentblock hash is not equal to the current block hash")
+			return errors.New("the parentblock hash is not equal to the current block hash")
+		} else if string(GetTxTreeRoot(b.Body)) != string(b.Header.TxRoot) {
+			fmt.Println("the transaction root is wrong")
+			return errors.New("the transaction root is wrong")
+		}
+	} else {
+		////TODO pow validation
+		if string(GetTxTreeRoot(b.Body)) != string(b.Header.TxRoot) {
+			fmt.Println("the transaction root is wrong")
+			return errors.New("the transaction root is wrong")
+		}
+
+		// Verify transactions according to GhostDAG Order
+		orderedBlocksNames := bc.Phantom.Order(bc.Phantom.G, 3) // Get the ordered list of blocks
+		var orderedBlocks []*core.Block
+
+		for _, v := range orderedBlocksNames {
+			orderedBlocks = append(orderedBlocks, bc.Phantom.G[v])
+		}
+		for _, block := range orderedBlocks {
+			for _, tx := range block.Body {
+				// Verify the transaction
+				if err := bc.VerifyTransaction(tx); err != nil {
+					return err
+				}
+				// Add the confirmed transaction to the set
+				bc.ConfirmedTxs[string(tx.TxHash)] = true
+			}
+		}
 	}
 	return nil
 }
