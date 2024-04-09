@@ -2,3 +2,5 @@
 .idea/block-emulator.iml
 .idea/block-emulator.iml
 .idea/workspace.xml
+/consensus_shard/pbft_all/record
+.idea/block-emulator-DAG.iml
