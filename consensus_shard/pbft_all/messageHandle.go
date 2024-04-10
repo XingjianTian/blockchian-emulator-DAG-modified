@@ -317,7 +317,7 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 		//每5s由Leader提议，生成一个区块
 		time.Sleep(time.Duration(intervalTime) * time.Millisecond)
 
-		//p.sequenceLock.Lock()
+		p.sequenceLock.Lock()
 		p.pl.Plog.Printf("S%dN%d now trying to Mine DAG Blocks...\n", p.ShardID, p.NodeID)
 
 		// implement interface to generate propose
@@ -330,6 +330,7 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 		DAGSendBlockMsg := message.DAGSendBlock{
 			RequestMsg: r,
 			Digest:     digest,
+			SeqID:      p.sequenceID,
 		}
 		// marshal and broadcast
 		DAGSendBlockMsgBytes, err := json.Marshal(DAGSendBlockMsg)
@@ -358,7 +359,61 @@ func (p *PbftConsensusNode) handleDAGReceiveBlock(content []byte) {
 	} else {
 		// do your operation in this interface
 		//检查区块合法性，添加上链，区分分片交易
-		_ = p.ihm.HandleinDAGReceiveBlock(DAGBlockmsg)
+
+		p.lock.Lock()
+		defer p.lock.Unlock()
+
+		//check if need to request parents
+		/*
+			block := core.DecodeB(DAGBlockmsg.RequestMsg.Msg.Content)
+			//check block all parents
+			for _, v := range block.Header.DagData.GetParentsNames() {
+				if p.CurChain.Phantom.G[v] == nil {
+					//Parents missing, ask
+				}
+			}*/
+		if !p.isReply[string(DAGBlockmsg.Digest)] {
+			p.pl.Plog.Printf("S%dN%d : has received DAGReceivedBlocks not Relied ... \n", p.ShardID, p.NodeID)
+			// if this node is left behind, so it need to requst blocks
+			if _, ok := p.requestPool[string(DAGBlockmsg.Digest)]; !ok {
+				p.isReply[string(DAGBlockmsg.Digest)] = true
+				p.askForLock.Lock()
+				// request the block
+				sn := &shard.Node{
+					NodeID:  p.view,
+					ShardID: p.ShardID,
+					IPaddr:  p.ip_nodeTable[p.ShardID][p.view],
+				}
+				orequest := message.RequestOldMessage{
+					SeqStartHeight: p.sequenceID + 1,
+					SeqEndHeight:   DAGBlockmsg.SeqID,
+					ServerNode:     sn,
+					SenderNode:     p.RunningNode,
+				}
+				bromyte, err := json.Marshal(orequest)
+				if err != nil {
+					log.Panic()
+				}
+
+				p.pl.Plog.Printf("S%dN%d : is now requesting message (seq %d to %d) ... \n", p.ShardID, p.NodeID, orequest.SeqStartHeight, orequest.SeqEndHeight)
+				msg_send := message.MergeMessage(message.CRequestOldrequest, bromyte)
+				networks.TcpDial(msg_send, orequest.ServerNode.IPaddr)
+			} else {
+				// implement interface
+				p.ihm.HandleinDAGReceiveBlock(DAGBlockmsg)
+				p.isReply[string(DAGBlockmsg.Digest)] = true
+				p.pl.Plog.Printf("S%dN%d: Reply DAG ReceivedBlocks \n", p.ShardID, p.NodeID, p.sequenceID)
+				p.sequenceID += 1
+			}
+
+			// if this node is a main node, then unlock the sequencelock
+			//if p.NodeID == p.view {
+			p.sequenceLock.Unlock()
+			p.pl.Plog.Printf("S%dN%d get sequenceLock unlocked...\n", p.ShardID, p.NodeID)
+			//}
+		}
+
+		//_ = p.ihm.HandleinDAGReceiveBlock(DAGBlockmsg)
 	}
 
 }

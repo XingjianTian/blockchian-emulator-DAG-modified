@@ -73,6 +73,8 @@ func (bc *BlockChain) SendTx2Pool(txs []*core.Transaction) {
 func (bc *BlockChain) getAccountState(addr utils.Address) (*core.AccountState, error) {
 	// Implement your logic to fetch the account state from the database
 	// For example, using the trie database
+	// 根据当前最新区块的stateroot重建世界状态树
+
 	st, err := trie.New(trie.TrieID(common.BytesToHash(bc.CurrentBlock.Header.StateRoot)), bc.triedb)
 	if err != nil {
 		log.Panic(err)
