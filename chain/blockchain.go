@@ -353,10 +353,10 @@ func (bc *BlockChain) AddBlock(b *core.Block) {
 		bc.CurrentBlock = b
 		bc.Storage.AddBlock(b)
 	} else {
-		if b.Header.Number != bc.CurrentBlock.Header.Number+1 {
-			fmt.Println("the block height is not correct")
-			return
-		}
+		//if b.Header.Number != bc.CurrentBlock.Header.Number+1 {
+		//	fmt.Println("the block height is not correct")
+		//	return
+		//}
 		// if this block is mined by the node, the transactions is no need to be handled again
 		if b.Header.Miner != bc.ChainConfig.NodeID {
 			rt := bc.GetUpdateStatusTrie(b.Body)
@@ -490,23 +490,23 @@ func (bc *BlockChain) IsValidBlock(b *core.Block) error {
 			return errors.New("the transaction root is wrong")
 		}
 
-		// Verify transactions according to GhostDAG Order
-		orderedBlocksNames := bc.Phantom.Order(bc.Phantom.G, 3) // Get the ordered list of blocks
-		var orderedBlocks []*core.Block
-
-		for _, v := range orderedBlocksNames {
-			orderedBlocks = append(orderedBlocks, bc.Phantom.G[v])
-		}
-		for _, block := range orderedBlocks {
-			for _, tx := range block.Body {
-				// Verify the transaction
-				if err := bc.VerifyTransaction(tx); err != nil {
-					return err
-				}
-				// Add the confirmed transaction to the set
-				bc.ConfirmedTxs[string(tx.TxHash)] = true
-			}
-		}
+		//// Verify transactions according to GhostDAG Order
+		//orderedBlocksNames := bc.Phantom.Order(bc.Phantom.G, 3) // Get the ordered list of blocks
+		//var orderedBlocks []*core.Block
+		//
+		//for _, v := range orderedBlocksNames {
+		//	orderedBlocks = append(orderedBlocks, bc.Phantom.G[v])
+		//}
+		//for _, block := range orderedBlocks {
+		//	for _, tx := range block.Body {
+		//		// Verify the transaction
+		//		if err := bc.VerifyTransaction(tx); err != nil {
+		//			return err
+		//		}
+		//		// Add the confirmed transaction to the set
+		//		bc.ConfirmedTxs[string(tx.TxHash)] = true
+		//	}
+		//}
 	}
 	return nil
 }

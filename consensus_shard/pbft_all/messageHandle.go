@@ -1,6 +1,7 @@
 package pbft_all
 
 import (
+	"blockEmulator/core"
 	"blockEmulator/message"
 	"blockEmulator/networks"
 	"blockEmulator/shard"
@@ -317,7 +318,7 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 		//每5s由Leader提议，生成一个区块
 		time.Sleep(time.Duration(intervalTime) * time.Millisecond)
 
-		p.sequenceLock.Lock()
+		//p.sequenceLock.Lock()
 		p.pl.Plog.Printf("S%dN%d now trying to Mine DAG Blocks...\n", p.ShardID, p.NodeID)
 
 		// implement interface to generate propose
@@ -330,7 +331,7 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 		DAGSendBlockMsg := message.DAGSendBlock{
 			RequestMsg: r,
 			Digest:     digest,
-			SeqID:      p.sequenceID,
+			//SeqID:      p.sequenceID,
 		}
 		// marshal and broadcast
 		DAGSendBlockMsgBytes, err := json.Marshal(DAGSendBlockMsg)
@@ -342,6 +343,40 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 		p.handleMessage(msg_send)
 		networks.Broadcast(p.RunningNode.IPaddr, p.getNeighborNodes(), msg_send)
 	}
+}
+
+func (p *PbftConsensusNode) handleCheckBlockParents(block *core.Block) bool {
+
+	flag := false
+	sn := &shard.Node{
+		NodeID:  p.view,
+		ShardID: p.ShardID,
+		IPaddr:  p.ip_nodeTable[p.ShardID][p.view],
+	}
+	//check block all parents
+	for _, v := range block.Header.DagData.GetParentsNames() {
+		if p.CurChain.Phantom.G[v] == nil {
+			flag = true
+			//Parents missing, ask
+			DAGRequestOldBlock := message.DAGRequestOldBlock{
+				OldBlockName:      v,
+				RequestFromNode:   p.RunningNode,
+				RequestSendToNode: sn,
+			}
+			DAGRequestOldBlockBytes, err := json.Marshal(DAGRequestOldBlock)
+			if err != nil {
+				log.Panic()
+			}
+
+			p.pl.Plog.Printf("S%dN%d : is now requesting old block %s... \n", p.ShardID, p.NodeID,
+				v)
+			msg_send := message.MergeMessage(message.CGhostDAGRequestOldBlock, DAGRequestOldBlockBytes)
+			networks.TcpDial(msg_send, DAGRequestOldBlock.RequestSendToNode.IPaddr)
+		}
+
+	}
+	return flag
+
 }
 
 func (p *PbftConsensusNode) handleDAGReceiveBlock(content []byte) {
@@ -359,61 +394,68 @@ func (p *PbftConsensusNode) handleDAGReceiveBlock(content []byte) {
 	} else {
 		// do your operation in this interface
 		//检查区块合法性，添加上链，区分分片交易
-
+		//RequestPool已有该区块，说明已经添加
+		if _, ok := p.requestPool[string(DAGBlockmsg.Digest)]; ok {
+			return
+		}
 		p.lock.Lock()
 		defer p.lock.Unlock()
-
-		//check if need to request parents
-		/*
-			block := core.DecodeB(DAGBlockmsg.RequestMsg.Msg.Content)
-			//check block all parents
-			for _, v := range block.Header.DagData.GetParentsNames() {
-				if p.CurChain.Phantom.G[v] == nil {
-					//Parents missing, ask
-				}
-			}*/
 		if !p.isReply[string(DAGBlockmsg.Digest)] {
-			p.pl.Plog.Printf("S%dN%d : has received DAGReceivedBlocks not Relied ... \n", p.ShardID, p.NodeID)
-			// if this node is left behind, so it need to requst blocks
-			if _, ok := p.requestPool[string(DAGBlockmsg.Digest)]; !ok {
-				p.isReply[string(DAGBlockmsg.Digest)] = true
-				p.askForLock.Lock()
-				// request the block
-				sn := &shard.Node{
-					NodeID:  p.view,
-					ShardID: p.ShardID,
-					IPaddr:  p.ip_nodeTable[p.ShardID][p.view],
-				}
-				orequest := message.RequestOldMessage{
-					SeqStartHeight: p.sequenceID + 1,
-					SeqEndHeight:   DAGBlockmsg.SeqID,
-					ServerNode:     sn,
-					SenderNode:     p.RunningNode,
-				}
-				bromyte, err := json.Marshal(orequest)
-				if err != nil {
-					log.Panic()
-				}
+			//check if need to request parents
+			block := core.DecodeB(DAGBlockmsg.RequestMsg.Msg.Content)
+			bMissingParents := p.handleCheckBlockParents(block)
 
-				p.pl.Plog.Printf("S%dN%d : is now requesting message (seq %d to %d) ... \n", p.ShardID, p.NodeID, orequest.SeqStartHeight, orequest.SeqEndHeight)
-				msg_send := message.MergeMessage(message.CRequestOldrequest, bromyte)
-				networks.TcpDial(msg_send, orequest.ServerNode.IPaddr)
-			} else {
-				// implement interface
+			if !bMissingParents {
 				p.ihm.HandleinDAGReceiveBlock(DAGBlockmsg)
 				p.isReply[string(DAGBlockmsg.Digest)] = true
-				p.pl.Plog.Printf("S%dN%d: Reply DAG ReceivedBlocks \n", p.ShardID, p.NodeID, p.sequenceID)
-				p.sequenceID += 1
+				p.pl.Plog.Printf("S%dN%d: Reply DAG ReceivedBlocks \n", p.ShardID, p.NodeID)
 			}
-
-			// if this node is a main node, then unlock the sequencelock
-			//if p.NodeID == p.view {
-			p.sequenceLock.Unlock()
-			p.pl.Plog.Printf("S%dN%d get sequenceLock unlocked...\n", p.ShardID, p.NodeID)
-			//}
 		}
 
-		//_ = p.ihm.HandleinDAGReceiveBlock(DAGBlockmsg)
+	}
+}
+
+func (p *PbftConsensusNode) handleDAGRequestOldBlock(content []byte) {
+	rob := new(message.DAGRequestOldBlock)
+	err := json.Unmarshal(content, rob)
+	if err != nil {
+		log.Panic()
+	}
+	p.pl.Plog.Printf("S%dN%d : received the old message requst from ...", p.ShardID, p.NodeID)
+	rob.RequestFromNode.PrintNode()
+
+	requestOldBlockName := rob.OldBlockName
+	block := p.CurChain.Phantom.G[requestOldBlockName]
+
+	if block != nil {
+		r := &message.Request{
+			RequestType: message.BlockRequest,
+			ReqTime:     time.Now(),
+		}
+		r.Msg.Content = block.Encode()
+		// implement interface to generate propose
+		digest := getDigest(r)
+		p.requestPool[string(digest)] = r
+		p.pl.Plog.Printf("S%dN%d put the request into the pool ...\n", p.ShardID, p.NodeID)
+
+		DAGSendBlockMsg := message.DAGSendBlock{
+			RequestMsg: r,
+			Digest:     digest,
+			//SeqID:      p.sequenceID,
+		}
+		// marshal and broadcast
+		DAGSendBlockMsgBytes, err := json.Marshal(DAGSendBlockMsg)
+		if err != nil {
+			log.Panic()
+		}
+		msg_send := message.MergeMessage(message.CGhostDAGSendBlock, DAGSendBlockMsgBytes)
+		//test
+		//p.handleMessage(msg_send)
+		p.pl.Plog.Printf("S%dN%d : has generated the message to be sent\n", p.ShardID, p.NodeID)
+		networks.TcpDial(msg_send, rob.RequestFromNode.IPaddr)
+		p.pl.Plog.Printf("S%dN%d : send blocks\n", p.ShardID, p.NodeID)
+	} else {
+		p.pl.Plog.Printf("S%dN%d : did not find request block\n", p.ShardID, p.NodeID)
 	}
 
 }

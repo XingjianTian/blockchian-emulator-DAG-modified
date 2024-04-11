@@ -179,6 +179,8 @@ func (p *PbftConsensusNode) handleMessage(msg []byte) {
 		p.WaitToStop()
 	case message.CGhostDAGSendBlock:
 		p.handleDAGReceiveBlock(content)
+	case message.CGhostDAGRequestOldBlock:
+		p.handleDAGRequestOldBlock(content)
 
 	// handle the message from outside
 	default:

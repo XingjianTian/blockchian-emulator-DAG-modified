@@ -45,6 +45,7 @@ func (rphm *RawRelayPbftExtraHandleMod) HandleinDAGReceiveBlock(receivedBlock *m
 	if rphm.pbftNode.CurChain.IsValidBlock(block) != nil {
 		rphm.pbftNode.pl.Plog.Printf("S%dN%d : not a valid DAG block\n", rphm.pbftNode.ShardID, rphm.pbftNode.NodeID)
 		flag = false
+		return flag
 	}
 	rphm.pbftNode.pl.Plog.Printf("S%dN%d : the DAGSendBlock message is correct, putting it into the RequestPool. \n", rphm.pbftNode.ShardID, rphm.pbftNode.NodeID)
 	rphm.pbftNode.requestPool[string(receivedBlock.Digest)] = receivedBlock.RequestMsg

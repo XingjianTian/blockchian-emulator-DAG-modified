@@ -318,7 +318,9 @@ func (p *Phantom) CalcBlue(Graph MapBlocks, k int, topTip *core.Block) {
 	for _, B := range Graph {
 		if blue, ok := B.Header.DagData.Blue[Bmax.Header.DagData.Name]; ok && blue == true {
 			B.Header.DagData.Blue[Bmax.Header.DagData.Name] = false
-			B.Header.DagData.Blue[topTip.Header.DagData.Name] = true
+			if topTip != nil {
+				B.Header.DagData.Blue[topTip.Header.DagData.Name] = true
+			}
 		}
 	}
 

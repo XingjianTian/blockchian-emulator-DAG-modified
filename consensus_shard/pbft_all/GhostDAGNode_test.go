@@ -1,11 +1,15 @@
 package pbft_all
 
 import (
+	"blockEmulator/core"
 	"blockEmulator/message"
 	"blockEmulator/params"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"math/big"
 	"os"
 	"strconv"
 	"testing"
@@ -72,16 +76,82 @@ func TestGhostDAGNodeMining(t *testing.T) {
 
 }
 
+func data2tx_test(data []string, nonce uint64) (*core.Transaction, bool) {
+	if data[6] == "0" && data[7] == "0" && len(data[3]) > 16 && len(data[4]) > 16 && data[3] != data[4] {
+		val, ok := new(big.Int).SetString(data[8], 10)
+		if !ok {
+			log.Panic("new int failed\n")
+		}
+		tx := core.NewTransaction(data[3][2:], data[4][2:], val, nonce)
+		return tx, true
+	}
+	return &core.Transaction{}, false
+}
+
+func GenerateTxPool_test() *core.TxPool {
+
+	//params.FileInput, params.TotalDataSize, params.BatchSize
+
+	txPool := core.TxPool{
+		TxQueue:   make([]*core.Transaction, 0),
+		RelayPool: make(map[uint64][]*core.Transaction),
+	}
+
+	dataTotalNum := 0
+
+	filePath := "D:/projects/Blockchain/block-emulator-DAG/dataset/0to999999_BlockTransaction.csv"
+
+	txfile, err := os.Open(filePath)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer txfile.Close()
+	reader := csv.NewReader(txfile)
+	txlist := make([]*core.Transaction, 0) // save the txs in this epoch (round)
+
+	for {
+		data, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Panic(err)
+		}
+		if tx, ok := data2tx_test(data, uint64(dataTotalNum)); ok {
+			txlist = append(txlist, tx)
+			dataTotalNum++
+		}
+
+		if dataTotalNum == 10000 {
+			break
+		}
+	}
+
+	for _, tx := range txlist {
+		txPool.TxQueue = append(txPool.TxQueue, tx)
+	}
+	return &txPool
+
+}
+
 func TestGhostDAGNodeReceiving(t *testing.T) {
 	DeleteFolder("./record")
 
+	txPool := GenerateTxPool_test()
+	if txPool == nil {
+		return
+	}
+
 	worker := NewPbftNode(0, 0, initConfig_test(0, 4, 0, 2), params.CommitteeMethod[3], true)
+
+	worker.CurChain.Txpool = txPool
 
 	var msgs [][]byte
 
 	for i := 0; i < 10; i++ {
 		// implement interface to generate propose
 		block := worker.CurChain.GenerateBlock()
+		time.Sleep(500 * time.Millisecond)
 		r := &message.Request{
 			RequestType: message.BlockRequest,
 			ReqTime:     time.Now(),
@@ -89,7 +159,8 @@ func TestGhostDAGNodeReceiving(t *testing.T) {
 		r.Msg.Content = block.Encode()
 		//生成区块，打包进消息
 		digest := getDigest(r)
-		worker.requestPool[string(digest)] = r
+		//test
+		//worker.requestPool[string(digest)] = r
 		worker.pl.Plog.Printf("S%dN%d put the request into the pool ...\n", worker.ShardID, worker.NodeID)
 
 		DAGSendBlockMsg := message.DAGSendBlock{
