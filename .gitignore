@@ -5,3 +5,5 @@
 /consensus_shard/pbft_all/record
 .idea/block-emulator-DAG.iml
 dataset/0to999999_BlockTransaction.csv
+/consensus_shard/pbft_all/record
+/consensus_shard/pbft_all/log

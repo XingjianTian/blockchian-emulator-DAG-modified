@@ -1,6 +1,7 @@
 package pbft_all
 
 import (
+	"blockEmulator/consensus_shard/GhostDAG_all/DAGBlock"
 	"blockEmulator/core"
 	"blockEmulator/message"
 	"blockEmulator/params"
@@ -143,14 +144,19 @@ func TestGhostDAGNodeReceiving(t *testing.T) {
 	}
 
 	worker := NewPbftNode(0, 0, initConfig_test(0, 4, 0, 2), params.CommitteeMethod[3], true)
-
+	go worker.TcpListen()
 	worker.CurChain.Txpool = txPool
 
 	var msgs [][]byte
-
+	blocksGenerated := make(DAGBlock.MapBlocks)
 	for i := 0; i < 10; i++ {
 		// implement interface to generate propose
 		block := worker.CurChain.GenerateBlock()
+		for key, value := range blocksGenerated {
+			block.Header.DagData.Prev[key] = value
+		}
+		blocksGenerated[block.Header.DagData.Name] = block
+
 		time.Sleep(500 * time.Millisecond)
 		r := &message.Request{
 			RequestType: message.BlockRequest,
@@ -174,6 +180,10 @@ func TestGhostDAGNodeReceiving(t *testing.T) {
 		}
 		msg_send := message.MergeMessage(message.CGhostDAGSendBlock, DAGSendBlockMsgBytes)
 		msgs = append(msgs, msg_send)
+	}
+
+	for i := len(msgs) - 1; i >= 0; i-- {
+		worker.handleMessage(msgs[i])
 	}
 
 	for _, v := range msgs {
