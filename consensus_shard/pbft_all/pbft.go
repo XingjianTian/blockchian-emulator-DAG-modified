@@ -73,6 +73,11 @@ type PbftConsensusNode struct {
 	ohm OpInterShards
 
 	isDAG bool
+
+	//p2p streaming blocks add requests for missing parents
+	//check everytime recevied new block if blocks in this queue has enough parents
+	//then add it from streaming queue
+	CacheRequestPool map[string]*message.DAGSendBlock
 }
 
 // generate a pbft consensus for a node
@@ -105,6 +110,8 @@ func NewPbftNode(shardID, nodeID uint64, pcc *params.ChainConfig, messageHandleT
 	p.sequenceID = p.CurChain.CurrentBlock.Header.Number + 1
 	p.pStop = make(chan uint64)
 	p.requestPool = make(map[string]*message.Request)
+	//cache
+	p.CacheRequestPool = make(map[string]*message.DAGSendBlock)
 	p.cntPrepareConfirm = make(map[string]map[*shard.Node]bool)
 	p.cntCommitConfirm = make(map[string]map[*shard.Node]bool)
 	p.isCommitBordcast = make(map[string]bool)

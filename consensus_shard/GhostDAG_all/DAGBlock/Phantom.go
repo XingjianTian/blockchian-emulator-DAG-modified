@@ -18,6 +18,10 @@ type Phantom struct {
 	Next        map[string]MapBlocks // Block don't have this info, it comes from the analysis of existing chain
 	GenesisHash core.BlockHash       // 创世区块的哈希
 	k           int                  // 蓝色反锥体的最大大小
+
+	//p2p streaming blocks queue for missing parents
+	//check everytime recevied new block if blocks in this queue has enough parents
+	//then add it from streaming queue
 }
 
 // NewPhantom 创建并初始化一个新的 Phantom 实例

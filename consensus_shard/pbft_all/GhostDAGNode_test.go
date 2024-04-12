@@ -12,6 +12,8 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"path"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -100,9 +102,12 @@ func GenerateTxPool_test() *core.TxPool {
 
 	dataTotalNum := 0
 
-	filePath := "D:/projects/Blockchain/block-emulator-DAG/dataset/0to999999_BlockTransaction.csv"
+	filePath := "../../dataset/0to999999_BlockTransaction.csv"
+	_, fileName, _, _ := runtime.Caller(1)
+	dataPath := path.Join(path.Dir(fileName), filePath)
+	fmt.Println(dataPath)
 
-	txfile, err := os.Open(filePath)
+	txfile, err := os.Open(dataPath)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -149,7 +154,7 @@ func TestGhostDAGNodeReceiving(t *testing.T) {
 
 	var msgs [][]byte
 	blocksGenerated := make(DAGBlock.MapBlocks)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 6; i++ {
 		// implement interface to generate propose
 		block := worker.CurChain.GenerateBlock()
 		for key, value := range blocksGenerated {

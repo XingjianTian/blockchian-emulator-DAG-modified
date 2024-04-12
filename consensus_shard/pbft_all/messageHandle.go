@@ -379,6 +379,25 @@ func (p *PbftConsensusNode) handleCheckBlockParents(block *core.Block) bool {
 
 }
 
+func (p *PbftConsensusNode) handleCheckCacheBlocks() {
+	for k, r := range p.CacheRequestPool {
+		block := core.DecodeB(r.RequestMsg.Msg.Content)
+
+		bMissingParents := false
+		for _, v := range block.Header.DagData.GetParentsNames() {
+			if p.CurChain.Phantom.G[v] == nil {
+				bMissingParents = true
+				break
+			}
+		}
+		if !bMissingParents {
+			//remove from cacheBlocks if exist
+			delete(p.CacheRequestPool, k)
+			p.ihm.HandleinDAGReceiveBlock(r)
+		}
+	}
+}
+
 func (p *PbftConsensusNode) handleDAGReceiveBlock(content []byte) {
 	//fetches blocks
 	p.RunningNode.PrintNode()
@@ -391,28 +410,40 @@ func (p *PbftConsensusNode) handleDAGReceiveBlock(content []byte) {
 	}
 	if digest := getDigest(DAGBlockmsg.RequestMsg); string(digest) != string(DAGBlockmsg.Digest) {
 		p.pl.Plog.Printf("S%dN%d : the digest is not consistent, so refuse to prepare. \n", p.ShardID, p.NodeID)
-	} else {
-		// do your operation in this interface
-		//检查区块合法性，添加上链，区分分片交易
-		//RequestPool已有该区块，说明已经添加
-		if _, ok := p.requestPool[string(DAGBlockmsg.Digest)]; ok {
-			return
-		}
-		p.lock.Lock()
-		defer p.lock.Unlock()
-		if !p.isReply[string(DAGBlockmsg.Digest)] {
-			//check if need to request parents
-			block := core.DecodeB(DAGBlockmsg.RequestMsg.Msg.Content)
-			bMissingParents := p.handleCheckBlockParents(block)
-
-			if !bMissingParents {
-				p.ihm.HandleinDAGReceiveBlock(DAGBlockmsg)
-				p.isReply[string(DAGBlockmsg.Digest)] = true
-				p.pl.Plog.Printf("S%dN%d: Reply DAG ReceivedBlocks \n", p.ShardID, p.NodeID)
-			}
-		}
-
+		return
 	}
+	// do your operation in this interface
+	//检查区块合法性，添加上链，区分分片交易
+	//RequestPool已有该区块，说明已经添加
+	if _, ok := p.requestPool[string(DAGBlockmsg.Digest)]; ok {
+		return
+	}
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	if !p.isReply[string(DAGBlockmsg.Digest)] {
+		//check if need to request parents
+		block := core.DecodeB(DAGBlockmsg.RequestMsg.Msg.Content)
+		bMissingParents := p.handleCheckBlockParents(block)
+
+		if !bMissingParents {
+			//remove from cacheBlocks if exist
+			//p.CacheRequestPool[string(DAGBlockmsg.Digest)] = nil
+			flag := p.ihm.HandleinDAGReceiveBlock(DAGBlockmsg)
+
+			//successfully add a block, then check cache
+			if flag {
+				p.handleCheckCacheBlocks()
+			}
+
+			p.isReply[string(DAGBlockmsg.Digest)] = true
+			p.pl.Plog.Printf("S%dN%d: Reply DAG ReceivedBlocks \n", p.ShardID, p.NodeID)
+
+		} else {
+			p.CacheRequestPool[string(DAGBlockmsg.Digest)] = DAGBlockmsg
+			p.pl.Plog.Printf("S%dN%d: DAGBlockMsg stored in cache \n", p.ShardID, p.NodeID)
+		}
+	}
+
 }
 
 func (p *PbftConsensusNode) handleDAGRequestOldBlock(content []byte) {
