@@ -2,8 +2,15 @@ package build
 
 import (
 	"blockEmulator/consensus_shard/pbft_all"
+	"blockEmulator/core"
 	"blockEmulator/params"
 	"blockEmulator/supervisor"
+	"encoding/csv"
+	"fmt"
+	"io"
+	"log"
+	"math/big"
+	"os"
 	"strconv"
 	"time"
 )
@@ -36,7 +43,7 @@ func initConfig(nid, nnm, sid, snm uint64) *params.ChainConfig {
 	return pcc
 }
 
-func BuildSupervisor(nnm, snm, mod uint64) {
+func BuildSupervisor(nnm, snm, mod uint64, isDAG bool) {
 	var measureMod []string
 	if mod == 0 || mod == 2 {
 		measureMod = params.MeasureBrokerMod
@@ -45,7 +52,7 @@ func BuildSupervisor(nnm, snm, mod uint64) {
 	}
 
 	lsn := new(supervisor.Supervisor)
-	lsn.NewSupervisor(params.SupervisorAddr, initConfig(123, nnm, 123, snm), params.CommitteeMethod[mod], measureMod...)
+	lsn.NewSupervisor(isDAG, params.SupervisorAddr, initConfig(123, nnm, 123, snm), params.CommitteeMethod[mod], measureMod...)
 	time.Sleep(10000 * time.Millisecond)
 	go lsn.SupervisorTxHandling()
 	lsn.TcpListen()
@@ -53,10 +60,82 @@ func BuildSupervisor(nnm, snm, mod uint64) {
 
 func BuildNewPbftNode(nid, nnm, sid, snm, mod uint64, isDAG bool) {
 	worker := pbft_all.NewPbftNode(sid, nid, initConfig(nid, nnm, sid, snm), params.CommitteeMethod[mod], isDAG)
-	if nid == 0 {
-		go worker.Propose()
+
+	if isDAG {
+		//worker.CurChain.Txpool = GenerateTxPool()
+		//for len(worker.CurChain.Txpool.TxQueue) != params.TotalDataSize {
+		//	time.Sleep(time.Second)
+		//}
+		go worker.MineDAGBlock()
 		worker.TcpListen()
 	} else {
-		worker.TcpListen()
+		if nid == 0 {
+			go worker.Propose()
+			worker.TcpListen()
+		} else {
+			worker.TcpListen()
+		}
 	}
+
+}
+
+func data2tx(data []string, nonce uint64) (*core.Transaction, bool) {
+	if data[6] == "0" && data[7] == "0" && len(data[3]) > 16 && len(data[4]) > 16 && data[3] != data[4] {
+		val, ok := new(big.Int).SetString(data[8], 10)
+		if !ok {
+			log.Panic("new int failed\n")
+		}
+		tx := core.NewTransaction(data[3][2:], data[4][2:], val, nonce)
+		return tx, true
+	}
+	return &core.Transaction{}, false
+}
+
+func GenerateTxPool() *core.TxPool {
+
+	//params.FileInput, params.TotalDataSize, params.BatchSize
+
+	txPool := core.TxPool{
+		TxQueue:   make([]*core.Transaction, 0),
+		RelayPool: make(map[uint64][]*core.Transaction),
+	}
+
+	dataTotalNum := 0
+
+	dataPath := "D:/Projects/Blockchain/block-emulator/dataset/0to999999_BlockTransaction.csv"
+	//_, fileName, _, _ := runtime.Caller(1)
+	//dataPath := path.Join(path.Dir(fileName), filePath)
+	fmt.Println(dataPath)
+
+	txfile, err := os.Open(dataPath)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer txfile.Close()
+	reader := csv.NewReader(txfile)
+	txlist := make([]*core.Transaction, 0) // save the txs in this epoch (round)
+
+	for {
+		data, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Panic(err)
+		}
+		if tx, ok := data2tx(data, uint64(dataTotalNum)); ok {
+			txlist = append(txlist, tx)
+			dataTotalNum++
+		}
+
+		if dataTotalNum == params.TotalDataSize {
+			break
+		}
+	}
+
+	for _, tx := range txlist {
+		txPool.TxQueue = append(txPool.TxQueue, tx)
+	}
+	return &txPool
+
 }

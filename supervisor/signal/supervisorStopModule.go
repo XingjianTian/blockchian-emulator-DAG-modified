@@ -40,3 +40,7 @@ func (ss *StopSignal) GapEnough() bool {
 	defer ss.stoplock.Unlock()
 	return ss.stopGap >= ss.stopThreshold
 }
+
+func (ss *StopSignal) Get() (int, int) {
+	return ss.stopGap, ss.stopThreshold
+}

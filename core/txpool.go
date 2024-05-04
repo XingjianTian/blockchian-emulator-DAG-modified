@@ -13,12 +13,14 @@ type TxPool struct {
 	RelayPool map[uint64][]*Transaction //designed for sharded blockchain, from Monoxide
 	lock      sync.Mutex
 	// The pending list is ignored
+	excutedMap map[string]bool
 }
 
 func NewTxPool() *TxPool {
 	return &TxPool{
-		TxQueue:   make([]*Transaction, 0),
-		RelayPool: make(map[uint64][]*Transaction),
+		TxQueue:    make([]*Transaction, 0),
+		RelayPool:  make(map[uint64][]*Transaction),
+		excutedMap: make(map[string]bool),
 	}
 }
 
@@ -36,7 +38,10 @@ func (txpool *TxPool) AddTx2Pool(tx *Transaction) {
 func (txpool *TxPool) AddTxs2Pool(txs []*Transaction) {
 	txpool.lock.Lock()
 	defer txpool.lock.Unlock()
-	for _, tx := range txs {
+
+	var txsToAdd = InterSect(txs, txpool.TxQueue)
+
+	for _, tx := range txsToAdd {
 		if tx.Time.IsZero() {
 			tx.Time = time.Now()
 		}
@@ -62,6 +67,35 @@ func (txpool *TxPool) PackTxs(max_txs uint64) []*Transaction {
 	txs_Packed := txpool.TxQueue[:txNum]
 	txpool.TxQueue = txpool.TxQueue[txNum:]
 	return txs_Packed
+}
+
+// 返回 slice1 中存在，但在 slice2 中不存在的元素
+func InterSect(slice1, slice2 []*Transaction) []*Transaction {
+	// 创建一个用于存储结果的map
+	m := make(map[string]bool)
+
+	// 将slice2中的元素设置为map的key，值无所谓
+	for _, item := range slice2 {
+		m[string(item.TxHash)] = true
+	}
+
+	// 遍历slice1，如果元素不在map中，则加入结果切片
+	var diff []*Transaction
+	for _, item := range slice1 {
+		if !m[string(item.TxHash)] {
+			diff = append(diff, item)
+		}
+	}
+
+	return diff
+}
+
+// Pack transactions for a proposal
+func (txpool *TxPool) RemoveTxs(excutedTxs []*Transaction) {
+	txpool.lock.Lock()
+	defer txpool.lock.Unlock()
+
+	txpool.TxQueue = InterSect(txpool.TxQueue, excutedTxs)
 }
 
 // Relay transactions

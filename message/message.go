@@ -110,6 +110,9 @@ type BlockInfoMsg struct {
 	Broker1Txs   []*core.Transaction // cross transactions at first time by broker
 	Broker2TxNum uint64              // the number of broker 2
 	Broker2Txs   []*core.Transaction // cross transactions at second time by broker
+
+	//for dag
+	TxRemain int
 }
 
 type SeqIDinfo struct {

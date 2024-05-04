@@ -2,6 +2,7 @@ package main
 
 import (
 	"blockEmulator/build"
+	"log"
 
 	"github.com/spf13/pflag"
 )
@@ -29,14 +30,17 @@ func main() {
 	pflag.Parse()
 
 	if isGen {
-		build.GenerateBatFile(nodeNum, shardNum, modID)
-		build.GenerateShellFile(nodeNum, shardNum, modID)
+		build.GenerateBatFile(nodeNum, shardNum, modID, isDAG)
+		//build.GenerateShellFile(nodeNum, shardNum, modID)
 		return
 	}
 
 	if isClient {
-		build.BuildSupervisor(uint64(nodeNum), uint64(shardNum), uint64(modID))
+		build.BuildSupervisor(uint64(nodeNum), uint64(shardNum), uint64(modID), isDAG)
 	} else {
+		if isDAG {
+			log.Println("DAG Node")
+		}
 		build.BuildNewPbftNode(uint64(nodeID), uint64(nodeNum), uint64(shardID), uint64(shardNum), uint64(modID), isDAG)
 	}
 }

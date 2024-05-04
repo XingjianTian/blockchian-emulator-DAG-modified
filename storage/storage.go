@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/boltdb/bolt"
@@ -23,11 +24,27 @@ type Storage struct {
 	DataBase              *bolt.DB
 }
 
+func findNewDirectory(baseDir string) (string, error) {
+	i := 0
+	for {
+		dir := filepath.Join(baseDir, fmt.Sprintf("record%d", i))
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			// 路径不存在，返回这个新路径
+			return dir, nil
+		} else if err != nil {
+			// 其他错误
+			return "", err
+		}
+		// 如果路径存在，增加i的值，继续循环
+		i++
+	}
+}
+
 // new a storage, build a bolt datase
 func NewStorage(cc *params.ChainConfig) *Storage {
-	_, errStat := os.Stat("./record")
+	_, errStat := os.Stat(params.RecordWrite_path)
 	if os.IsNotExist(errStat) {
-		errMkdir := os.Mkdir("./record", os.ModePerm)
+		errMkdir := os.Mkdir(params.RecordWrite_path, os.ModePerm)
 		if errMkdir != nil {
 			log.Panic(errMkdir)
 		}
@@ -36,7 +53,7 @@ func NewStorage(cc *params.ChainConfig) *Storage {
 	}
 
 	s := &Storage{
-		dbFilePath:            "./record/" + strconv.FormatUint(cc.ShardID, 10) + "_" + strconv.FormatUint(cc.NodeID, 10) + "_database",
+		dbFilePath:            params.RecordWrite_path + "/" + strconv.FormatUint(cc.ShardID, 10) + "_" + strconv.FormatUint(cc.NodeID, 10) + "_database",
 		blockBucket:           "block",
 		blockHeaderBucket:     "blockHeader",
 		newestBlockHashBucket: "newestBlockHash",

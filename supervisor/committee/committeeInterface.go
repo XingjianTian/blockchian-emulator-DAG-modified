@@ -1,9 +1,11 @@
 package committee
 
-import "blockEmulator/message"
+import (
+	"blockEmulator/message"
+)
 
 type CommitteeModule interface {
 	HandleBlockInfo(*message.BlockInfoMsg)
-	MsgSendingControl()
+	MsgSendingControl(isDAG bool)
 	HandleOtherMessage([]byte)
 }

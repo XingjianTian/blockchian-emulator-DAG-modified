@@ -4,6 +4,7 @@
 package supervisor
 
 import (
+	"blockEmulator/core"
 	"blockEmulator/message"
 	"blockEmulator/networks"
 	"blockEmulator/params"
@@ -46,9 +47,15 @@ type Supervisor struct {
 	testMeasureMods []measure.MeasureModule
 
 	// diy, add more structures or classes here ...
+	//for dag
+	TxExcutedCnt int
+	TxExcuted    []*core.Transaction
+	TxRelayCnt   int
+	TxRelayed    []*core.Transaction
+	isDAG        bool
 }
 
-func (d *Supervisor) NewSupervisor(ip string, pcc *params.ChainConfig, committeeMethod string, measureModNames ...string) {
+func (d *Supervisor) NewSupervisor(isDAG bool, ip string, pcc *params.ChainConfig, committeeMethod string, measureModNames ...string) {
 	d.IPaddr = ip
 	d.ChainConfig = pcc
 	d.Ip_nodeTable = params.IPmap_nodeTable
@@ -56,6 +63,11 @@ func (d *Supervisor) NewSupervisor(ip string, pcc *params.ChainConfig, committee
 	d.sl = supervisor_log.NewSupervisorLog()
 
 	d.Ss = signal.NewStopSignal(2 * int(pcc.ShardNums))
+	d.TxExcutedCnt = 0
+	d.TxExcuted = make([]*core.Transaction, 0)
+	d.TxRelayCnt = 0
+	d.TxRelayed = make([]*core.Transaction, 0)
+	d.isDAG = isDAG
 
 	switch committeeMethod {
 	case "CLPA_Broker":
@@ -106,8 +118,16 @@ func (d *Supervisor) handleBlockInfos(content []byte) {
 	} else {
 		d.Ss.StopGap_Reset()
 	}
+	d.TxExcuted = append(d.TxExcuted, core.InterSect(bim.ExcutedTxs, d.TxExcuted)...)
+
+	d.TxExcutedCnt = len(d.TxExcuted)
+
+	d.TxRelayed = append(d.TxRelayed, core.InterSect(bim.Relay1Txs, d.TxRelayed)...)
+
+	d.TxRelayCnt = len(d.TxRelayed)
 
 	d.comMod.HandleBlockInfo(bim)
+	d.sl.Slog.Println("Supervisor: TxsExcuted Num:%d, TxsRelayCnt: %d", d.TxExcutedCnt, d.TxRelayCnt)
 
 	// measure update
 	for _, measureMod := range d.testMeasureMods {
@@ -119,12 +139,20 @@ func (d *Supervisor) handleBlockInfos(content []byte) {
 // read transactions from dataFile. When the number of data is enough,
 // the Supervisor will do re-partition and send partitionMSG and txs to leaders.
 func (d *Supervisor) SupervisorTxHandling() {
-	d.comMod.MsgSendingControl()
+	d.comMod.MsgSendingControl(d.isDAG)
 
-	// TxHandling is end
-	for !d.Ss.GapEnough() { // wait all txs to be handled
+	/*
+		//TxHandling is end
+		for !d.Ss.GapEnough() && d.TxExcutedCnt < params.TotalDataSize {
+			//for d.TxExcutedCnt < params.TotalDataSize { // wait all txs to be handled
+			time.Sleep(time.Second)
+		}*/
+	for d.TxExcutedCnt != params.TotalDataSize {
+		//for d.TxExcutedCnt < params.TotalDataSize { // wait all txs to be handled
 		time.Sleep(time.Second)
+		d.sl.Slog.Println("Supervisor TxExcutedCnt%d", d.TxExcutedCnt)
 	}
+
 	// send stop message
 	stopmsg := message.MergeMessage(message.CStop, []byte("this is a stop message~"))
 	d.sl.Slog.Println("Supervisor: now sending cstop message to all nodes")

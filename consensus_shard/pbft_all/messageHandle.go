@@ -314,16 +314,25 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 			return
 		default:
 		}
-		intervalTime := randomInRange(p.pbftChainConfig.BlockInterval, 2*p.pbftChainConfig.BlockInterval)
-		//每5s由Leader提议，生成一个区块
+		intervalTime := randomInRange(p.pbftChainConfig.BlockInterval/2, 3/2*p.pbftChainConfig.BlockInterval)
+		p.pl.Plog.Printf("S%dN%d now wait %v intervaltime...\n", p.ShardID, p.NodeID, intervalTime)
+		//随机时间，模拟difficulty
 		time.Sleep(time.Duration(intervalTime) * time.Millisecond)
 
 		//p.sequenceLock.Lock()
 		p.pl.Plog.Printf("S%dN%d now trying to Mine DAG Blocks...\n", p.ShardID, p.NodeID)
+		p.pl.Plog.Printf("S%dN%d : txpool txs %d", p.ShardID, p.NodeID, len(p.CurChain.Txpool.TxQueue))
 
 		// implement interface to generate propose
-		_, r := p.ihm.HandleinDAGMineBlock()
-		//生成区块，打包进消息
+		notNil, r := p.ihm.HandleinDAGMineBlock()
+
+		if !notNil {
+			p.pl.Plog.Printf("S%dN%d nil txs pool size...\n", p.ShardID, p.NodeID)
+			//return
+			continue
+		}
+
+		//Generate Blocks And make messages&digest
 		digest := getDigest(r)
 		p.requestPool[string(digest)] = r
 		p.pl.Plog.Printf("S%dN%d put the request into the pool ...\n", p.ShardID, p.NodeID)
@@ -340,7 +349,7 @@ func (p *PbftConsensusNode) MineDAGBlock() {
 		}
 		msg_send := message.MergeMessage(message.CGhostDAGSendBlock, DAGSendBlockMsgBytes)
 		//test
-		p.handleMessage(msg_send)
+		//p.handleMessage(msg_send)
 		networks.Broadcast(p.RunningNode.IPaddr, p.getNeighborNodes(), msg_send)
 	}
 }
@@ -357,6 +366,8 @@ func (p *PbftConsensusNode) handleCheckBlockParents(block *core.Block) bool {
 	for _, v := range block.Header.DagData.GetParentsNames() {
 		if p.CurChain.Phantom.G[v] == nil {
 			flag = true
+			p.pl.Plog.Printf("S%dN%d : missing parent block %s... \n", p.ShardID, p.NodeID,
+				v)
 			//Parents missing, ask
 			DAGRequestOldBlock := message.DAGRequestOldBlock{
 				OldBlockName:      v,
@@ -368,8 +379,8 @@ func (p *PbftConsensusNode) handleCheckBlockParents(block *core.Block) bool {
 				log.Panic()
 			}
 
-			p.pl.Plog.Printf("S%dN%d : is now requesting old block %s... \n", p.ShardID, p.NodeID,
-				v)
+			p.pl.Plog.Printf("S%dN%d : is now requesting old block %s... from %s \n", p.ShardID, p.NodeID,
+				v, DAGRequestOldBlock.RequestSendToNode.PrintNode())
 			msg_send := message.MergeMessage(message.CGhostDAGRequestOldBlock, DAGRequestOldBlockBytes)
 			networks.TcpDial(msg_send, DAGRequestOldBlock.RequestSendToNode.IPaddr)
 		}
@@ -415,9 +426,9 @@ func (p *PbftConsensusNode) handleDAGReceiveBlock(content []byte) {
 	// do your operation in this interface
 	//检查区块合法性，添加上链，区分分片交易
 	//RequestPool已有该区块，说明已经添加
-	if _, ok := p.requestPool[string(DAGBlockmsg.Digest)]; ok {
-		return
-	}
+	//if _, ok := p.requestPool[string(DAGBlockmsg.Digest)]; ok {
+	//	return
+	//}
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	if !p.isReply[string(DAGBlockmsg.Digest)] {
@@ -452,8 +463,7 @@ func (p *PbftConsensusNode) handleDAGRequestOldBlock(content []byte) {
 	if err != nil {
 		log.Panic()
 	}
-	p.pl.Plog.Printf("S%dN%d : received the old message requst from ...", p.ShardID, p.NodeID)
-	rob.RequestFromNode.PrintNode()
+	p.pl.Plog.Printf("S%dN%d : received the old message request from %s", p.ShardID, p.NodeID, rob.RequestFromNode.PrintNode())
 
 	requestOldBlockName := rob.OldBlockName
 	block := p.CurChain.Phantom.G[requestOldBlockName]
@@ -477,16 +487,17 @@ func (p *PbftConsensusNode) handleDAGRequestOldBlock(content []byte) {
 		// marshal and broadcast
 		DAGSendBlockMsgBytes, err := json.Marshal(DAGSendBlockMsg)
 		if err != nil {
+			p.pl.Plog.Printf("S%dN%d send old request error ...\n", p.ShardID, p.NodeID)
 			log.Panic()
 		}
 		msg_send := message.MergeMessage(message.CGhostDAGSendBlock, DAGSendBlockMsgBytes)
 		//test
-		//p.handleMessage(msg_send)
+		//p.handleMessage(msg_send)vvv
 		p.pl.Plog.Printf("S%dN%d : has generated the message to be sent\n", p.ShardID, p.NodeID)
 		networks.TcpDial(msg_send, rob.RequestFromNode.IPaddr)
 		p.pl.Plog.Printf("S%dN%d : send blocks\n", p.ShardID, p.NodeID)
 	} else {
-		p.pl.Plog.Printf("S%dN%d : did not find request block\n", p.ShardID, p.NodeID)
+		p.pl.Plog.Printf("S%dN%d : did not find request block %s\n", p.ShardID, p.NodeID, requestOldBlockName)
 	}
 
 }

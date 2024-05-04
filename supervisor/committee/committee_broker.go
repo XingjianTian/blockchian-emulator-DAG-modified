@@ -69,7 +69,7 @@ func (bcm *BrokerCommitteeMod) fetchModifiedMap(key string) uint64 {
 	return uint64(utils.Addr2Shard(key))
 }
 
-func (bcm *BrokerCommitteeMod) txSending(txlist []*core.Transaction) {
+func (bcm *BrokerCommitteeMod) txSending(txlist []*core.Transaction, isDAG bool) {
 	// the txs will be sent
 	sendToShard := make(map[uint64][]*core.Transaction)
 
@@ -104,7 +104,7 @@ func (bcm *BrokerCommitteeMod) txSending(txlist []*core.Transaction) {
 	}
 }
 
-func (bcm *BrokerCommitteeMod) MsgSendingControl() {
+func (bcm *BrokerCommitteeMod) MsgSendingControl(isDAG bool) {
 	txfile, err := os.Open(bcm.csvPath)
 	if err != nil {
 		log.Panic(err)
@@ -132,7 +132,7 @@ func (bcm *BrokerCommitteeMod) MsgSendingControl() {
 		if len(txlist) == int(bcm.batchDataNum) || bcm.nowDataNum == bcm.dataTotalNum {
 
 			itx := bcm.dealTxByBroker(txlist)
-			bcm.txSending(itx)
+			bcm.txSending(itx, isDAG)
 
 			txlist = make([]*core.Transaction, 0)
 			bcm.Ss.StopGap_Reset()
@@ -225,7 +225,7 @@ func (bcm *BrokerCommitteeMod) handleBrokerType1Mes(brokerType1Megs []*message.B
 		bcm.brokerConfirm1Pool[string(tx1.TxHash)] = confirm1
 		bcm.brokerModuleLock.Unlock()
 	}
-	bcm.txSending(tx1s)
+	bcm.txSending(tx1s, false)
 	fmt.Println("BrokerType1Mes received by shard,  add brokerTx1 len ", len(tx1s))
 }
 
@@ -248,7 +248,7 @@ func (bcm *BrokerCommitteeMod) handleBrokerType2Mes(brokerType2Megs []*message.B
 		bcm.brokerConfirm2Pool[string(tx2.TxHash)] = confirm2
 		bcm.brokerModuleLock.Unlock()
 	}
-	bcm.txSending(tx2s)
+	bcm.txSending(tx2s, false)
 	fmt.Println("broker tx2 add to pool len ", len(tx2s))
 }
 

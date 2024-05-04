@@ -88,7 +88,7 @@ func (ccm *CLPACommitteeMod_Broker) HandleOtherMessage(msg []byte) {
 		log.Panic()
 	}
 	itxs := ccm.dealTxByBroker(itct.Txs)
-	ccm.txSending(itxs)
+	ccm.txSending(itxs, false)
 }
 
 func (ccm *CLPACommitteeMod_Broker) fetchModifiedMap(key string) uint64 {
@@ -99,7 +99,7 @@ func (ccm *CLPACommitteeMod_Broker) fetchModifiedMap(key string) uint64 {
 	}
 }
 
-func (ccm *CLPACommitteeMod_Broker) txSending(txlist []*core.Transaction) {
+func (ccm *CLPACommitteeMod_Broker) txSending(txlist []*core.Transaction, isDAG bool) {
 	// the txs will be sent
 	sendToShard := make(map[uint64][]*core.Transaction)
 
@@ -137,7 +137,7 @@ func (ccm *CLPACommitteeMod_Broker) txSending(txlist []*core.Transaction) {
 	}
 }
 
-func (ccm *CLPACommitteeMod_Broker) MsgSendingControl() {
+func (ccm *CLPACommitteeMod_Broker) MsgSendingControl(isDAG bool) {
 	txfile, err := os.Open(ccm.csvPath)
 	if err != nil {
 		log.Panic(err)
@@ -170,7 +170,7 @@ func (ccm *CLPACommitteeMod_Broker) MsgSendingControl() {
 
 			itx := ccm.dealTxByBroker(txlist)
 
-			ccm.txSending(itx)
+			ccm.txSending(itx, false)
 
 			// reset the variants about tx sending
 			txlist = make([]*core.Transaction, 0)
@@ -332,7 +332,7 @@ func (ccm *CLPACommitteeMod_Broker) handleBrokerType1Mes(brokerType1Megs []*mess
 		ccm.brokerConfirm1Pool[string(tx1.TxHash)] = confirm1
 		ccm.brokerModuleLock.Unlock()
 	}
-	ccm.txSending(tx1s)
+	ccm.txSending(tx1s, false)
 	fmt.Println("BrokerType1Mes received by shard,  add brokerTx1 len ", len(tx1s))
 }
 
@@ -355,7 +355,7 @@ func (ccm *CLPACommitteeMod_Broker) handleBrokerType2Mes(brokerType2Megs []*mess
 		ccm.brokerConfirm2Pool[string(tx2.TxHash)] = confirm2
 		ccm.brokerModuleLock.Unlock()
 	}
-	ccm.txSending(tx2s)
+	ccm.txSending(tx2s, false)
 	fmt.Println("broker tx2 add to pool len ", len(tx2s))
 }
 

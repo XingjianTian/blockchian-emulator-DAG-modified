@@ -226,6 +226,11 @@ func (bc *BlockChain) GenerateBlock() *core.Block {
 		return b
 	} else {
 		txs := bc.Txpool.PackTxs(bc.ChainConfig.BlockSize)
+
+		if len(txs) == 0 {
+			return nil
+		}
+
 		bh := &core.BlockHeader{
 			//changeParent
 			ParentBlockHash: bc.CurrentBlock.Hash,
@@ -240,7 +245,9 @@ func (bc *BlockChain) GenerateBlock() *core.Block {
 		bh.StateRoot = rt.Bytes()
 		bh.TxRoot = GetTxTreeRoot(txs)
 		b := core.NewBlock(bh, txs)
-		b.Header.Miner = 0
+		////miner
+		b.Header.Miner = bc.ChainConfig.NodeID
+
 		b.Hash = b.Header.Hash()
 
 		//DAGStructure
@@ -353,14 +360,16 @@ func (bc *BlockChain) AddBlock(b *core.Block) {
 		bc.CurrentBlock = b
 		bc.Storage.AddBlock(b)
 	} else {
-		//if b.Header.Number != bc.CurrentBlock.Header.Number+1 {
-		//	fmt.Println("the block height is not correct")
-		//	return
-		//}
+		if b.Header.Number != bc.CurrentBlock.Header.Number+1 {
+			fmt.Println("the block height is not correct")
+			return
+		}
 		// if this block is mined by the node, the transactions is no need to be handled again
 		if b.Header.Miner != bc.ChainConfig.NodeID {
 			rt := bc.GetUpdateStatusTrie(b.Body)
 			fmt.Println(bc.CurrentBlock.Header.Number+1, "the root = ", rt.Bytes())
+			bc.Txpool.RemoveTxs(b.Body)
+			fmt.Println("RemoveTxs %d from txpool", len(b.Body))
 		}
 		bc.CurrentBlock = b
 		//存储添加
@@ -484,13 +493,15 @@ func (bc *BlockChain) IsValidBlock(b *core.Block) error {
 			return errors.New("the transaction root is wrong")
 		}
 	} else {
+
 		////TODO pow validation
 		if string(GetTxTreeRoot(b.Body)) != string(b.Header.TxRoot) {
 			fmt.Println("the transaction root is wrong")
 			return errors.New("the transaction root is wrong")
 		}
 
-		//// Verify transactions according to GhostDAG Order
+		//var txsExecutedInDAG []*core.Transaction
+		////// Verify transactions according to GhostDAG Order
 		//orderedBlocksNames := bc.Phantom.Order(bc.Phantom.G, 3) // Get the ordered list of blocks
 		//var orderedBlocks []*core.Block
 		//
@@ -500,13 +511,19 @@ func (bc *BlockChain) IsValidBlock(b *core.Block) error {
 		//for _, block := range orderedBlocks {
 		//	for _, tx := range block.Body {
 		//		// Verify the transaction
-		//		if err := bc.VerifyTransaction(tx); err != nil {
-		//			return err
-		//		}
+		//		//if err := bc.VerifyTransaction(tx); err != nil {
+		//		//	return err
+		//		//}
+		//		txsExecutedInDAG = append(txsExecutedInDAG, tx)
 		//		// Add the confirmed transaction to the set
-		//		bc.ConfirmedTxs[string(tx.TxHash)] = true
+		//		//bc.ConfirmedTxs[string(tx.TxHash)] = true
 		//	}
 		//}
+		//if core.InterSect(b.Body, txsExecutedInDAG) != nil {
+		//	return errors.New("there are txs already executed")
+		//
+		//}
+
 	}
 	return nil
 }
@@ -603,6 +620,7 @@ func (bc *BlockChain) FetchAccounts(addrs []string) []*core.AccountState {
 
 // close a blockChain, close the database inferfaces
 func (bc *BlockChain) CloseBlockChain() {
+	bc.PrintBlockChain()
 	bc.Storage.DataBase.Close()
 	bc.triedb.CommitPreimages()
 }

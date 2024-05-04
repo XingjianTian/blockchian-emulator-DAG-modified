@@ -55,24 +55,43 @@ func data2tx(data []string, nonce uint64) (*core.Transaction, bool) {
 
 func (rthm *RelayCommitteeModule) HandleOtherMessage([]byte) {}
 
-func (rthm *RelayCommitteeModule) txSending(txlist []*core.Transaction) {
+func (rthm *RelayCommitteeModule) txSending(txlist []*core.Transaction, isDAG bool) {
 	// the txs will be sent
+
 	sendToShard := make(map[uint64][]*core.Transaction)
 
 	for idx := 0; idx <= len(txlist); idx++ {
 		if idx > 0 && (idx%params.InjectSpeed == 0 || idx == len(txlist)) {
 			// send to shard
-			for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
-				it := message.InjectTxs{
-					Txs:       sendToShard[sid],
-					ToShardID: sid,
+			if !isDAG {
+				for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
+
+					it := message.InjectTxs{
+						Txs:       sendToShard[sid],
+						ToShardID: sid,
+					}
+					itByte, err := json.Marshal(it)
+					if err != nil {
+						log.Panic(err)
+					}
+					send_msg := message.MergeMessage(message.CInject, itByte)
+					go networks.TcpDial(send_msg, rthm.IpNodeTable[sid][0])
 				}
-				itByte, err := json.Marshal(it)
-				if err != nil {
-					log.Panic(err)
+			} else {
+				for sid := uint64(0); sid < uint64(params.ShardNum); sid++ {
+					for nid := uint64(0); nid < uint64(params.NodesInShard); nid++ {
+						it := message.InjectTxs{
+							Txs:       sendToShard[sid],
+							ToShardID: sid,
+						}
+						itByte, err := json.Marshal(it)
+						if err != nil {
+							log.Panic(err)
+						}
+						send_msg := message.MergeMessage(message.CInject, itByte)
+						go networks.TcpDial(send_msg, rthm.IpNodeTable[sid][nid])
+					}
 				}
-				send_msg := message.MergeMessage(message.CInject, itByte)
-				go networks.TcpDial(send_msg, rthm.IpNodeTable[sid][0])
 			}
 			sendToShard = make(map[uint64][]*core.Transaction)
 			time.Sleep(time.Second)
@@ -87,7 +106,10 @@ func (rthm *RelayCommitteeModule) txSending(txlist []*core.Transaction) {
 }
 
 // read transactions, the Number of the transactions is - batchDataNum
-func (rthm *RelayCommitteeModule) MsgSendingControl() {
+func (rthm *RelayCommitteeModule) MsgSendingControl(isDAG bool) {
+	//if isDAG {
+	//	return
+	//}
 	txfile, err := os.Open(rthm.csvPath)
 	if err != nil {
 		log.Panic(err)
@@ -111,7 +133,8 @@ func (rthm *RelayCommitteeModule) MsgSendingControl() {
 
 		// re-shard condition, enough edges
 		if len(txlist) == int(rthm.batchDataNum) || rthm.nowDataNum == rthm.dataTotalNum {
-			rthm.txSending(txlist)
+			rthm.txSending(txlist, isDAG)
+			rthm.sl.Slog.Printf("sending txlist len %d", len(txlist))
 			// reset the variants about tx sending
 			txlist = make([]*core.Transaction, 0)
 			rthm.Ss.StopGap_Reset()
@@ -126,4 +149,5 @@ func (rthm *RelayCommitteeModule) MsgSendingControl() {
 // no operation here
 func (rthm *RelayCommitteeModule) HandleBlockInfo(b *message.BlockInfoMsg) {
 	rthm.sl.Slog.Printf("received from shard %d in epoch %d.\n", b.SenderShardID, b.Epoch)
+
 }

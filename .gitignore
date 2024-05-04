@@ -9,3 +9,9 @@ dataset/0to999999_BlockTransaction.csv
 /consensus_shard/pbft_all/log
 /consensus_shard/pbft_all/log
 /consensus_shard/pbft_all/record
+/log
+/record
+/record0
+/result
+/record
+/record

@@ -68,7 +68,7 @@ func (ccm *CLPACommitteeModule) fetchModifiedMap(key string) uint64 {
 	}
 }
 
-func (ccm *CLPACommitteeModule) txSending(txlist []*core.Transaction) {
+func (ccm *CLPACommitteeModule) txSending(txlist []*core.Transaction, isDAG bool) {
 	// the txs will be sent
 	sendToShard := make(map[uint64][]*core.Transaction)
 
@@ -99,7 +99,7 @@ func (ccm *CLPACommitteeModule) txSending(txlist []*core.Transaction) {
 	}
 }
 
-func (ccm *CLPACommitteeModule) MsgSendingControl() {
+func (ccm *CLPACommitteeModule) MsgSendingControl(isDAG bool) {
 	txfile, err := os.Open(ccm.csvPath)
 	if err != nil {
 		log.Panic(err)
@@ -129,7 +129,7 @@ func (ccm *CLPACommitteeModule) MsgSendingControl() {
 			if ccm.clpaLastRunningTime.IsZero() {
 				ccm.clpaLastRunningTime = time.Now()
 			}
-			ccm.txSending(txlist)
+			ccm.txSending(txlist, false)
 
 			// reset the variants about tx sending
 			txlist = make([]*core.Transaction, 0)

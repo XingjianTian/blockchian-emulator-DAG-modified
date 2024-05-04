@@ -89,7 +89,7 @@ func NewPbftNode(shardID, nodeID uint64, pcc *params.ChainConfig, messageHandleT
 	p.ShardID = shardID
 	p.NodeID = nodeID
 	p.pbftChainConfig = pcc
-	fp := "./record/ldb/s" + strconv.FormatUint(shardID, 10) + "/n" + strconv.FormatUint(nodeID, 10)
+	fp := params.RecordWrite_path + "/ldb/s" + strconv.FormatUint(shardID, 10) + "/n" + strconv.FormatUint(nodeID, 10)
 	var err error
 	p.db, err = rawdb.NewLevelDBDatabase(fp, 0, 1, "accountState", false)
 	if err != nil {
@@ -267,17 +267,28 @@ func (p *PbftConsensusNode) OldTcpListen() {
 
 // when received stop
 func (p *PbftConsensusNode) WaitToStop() {
-	p.pl.Plog.Println("handling stop message")
-	p.stopLock.Lock()
-	p.stop = true
-	p.stopLock.Unlock()
-	if p.NodeID == p.view {
+	if !p.isDAG {
+		p.pl.Plog.Println("handling stop message")
+		p.stopLock.Lock()
+		p.stop = true
+		p.stopLock.Unlock()
+		if p.NodeID == p.view {
+			p.pStop <- 1
+		}
+		networks.CloseAllConnInPool()
+		p.tcpln.Close()
+		p.closePbft()
+		p.pl.Plog.Println("handled stop message")
+	} else {
+		p.pl.Plog.Println("DAG Node Handling stop message")
+		//p.stopLock.Lock()
+		p.stop = true
+		//p.stopLock.Unlock()
 		p.pStop <- 1
+		networks.CloseAllConnInPool()
+		p.tcpln.Close()
+		p.closePbft()
 	}
-	networks.CloseAllConnInPool()
-	p.tcpln.Close()
-	p.closePbft()
-	p.pl.Plog.Println("handled stop message")
 }
 
 func (p *PbftConsensusNode) getStopSignal() bool {
