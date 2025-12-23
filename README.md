@@ -71,9 +71,3 @@ Quickly get started with BlockEmulator through the following document. Please re
 - **Yue Lin**: Master’s student at Sun Yat-sen University, joined HuangLab in 2021.  
 - **Miaoyong Xu**: Master’s student at Sun Yat-sen University, joined HuangLab in 2021.  
 - **Junhao Wu**: Undergraduate intern at Sun Yat-sen University, joined HuangLab in 2022.  
-
-### 设计说明
-1. **结构合理性**：开头明确标注“Extended Version”，清晰区分“我的贡献”和“原项目内容”，既突出你的工作，又保留原项目完整性，符合开源项目二次开发的README规范；  
-2. **核心亮点突出**：将“实现Kaspa DAG共识、重构代码、完成实验验证”作为独立模块前置，精准匹配你要强调的核心改动；  
-3. **溯源清晰**：给出原项目仓库链接，避免版权争议，同时保持原README内容无修改，仅做格式适配；  
-4. **学术性适配**：表述上采用科研项目常用的专业术语（如“end-to-end experimental verification”“cross-shard transaction verification”），符合区块链领域的表达习惯。
