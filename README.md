@@ -1,4 +1,7 @@
 ### BlockEmulator Handbook (Extended Version)
+
+**English (primary)** | [简体中文](README.zh-CN.md)
+
 This is an extended version of the official handbook of BlockEmulator (version 1.0) developed by HuangLab (School of Software Engineering, Sun Yat-sen University). The original official handbook and Chinese-version handbook are available at the [original repository](https://github.com/HuangLab-SYSU/block-emulator/tree/main).  
 
 #### My Contributions (Based on BlockEmulator v1.0)
@@ -44,7 +47,7 @@ The following papers from HuangLab's publications have adopted BlockEmulator as 
 #### 4. Highlights of BlockEmulator
 - **Lightweight**: BlockEmulator is a lightweight testbed platform for blockchain experiments.  
 - **Fast Configuration**: BlockEmulator enables users to set up their environments quickly and supports remote deployment on the Cloud.  
-- **Customization**: BlockEmulator is implemented using goland language, which supports users' customization and modification.  
+- **Customization**: BlockEmulator is implemented using Go, which supports users' customization and modification.  
 - **Easy to Conduct Experiments**: BlockEmulator supports the replay of historical transactions of mainstream blockchains (such as Ethereum). It can automatically yield experimental log files. Using those log files, researchers can interpret plenty of metrics such as system throughput, confirmation latency of transactions, the queueing of the transaction pool, etc. This function is very useful for researchers and students to facilitate their experimental data collection and plotting of experimental charts.  
 
 #### 5. Getting Started to Use BlockEmulator
